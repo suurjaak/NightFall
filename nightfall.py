@@ -5,7 +5,7 @@ hours.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    17.10.2012
+@modified    18.10.2012
 """
 import datetime
 import os
@@ -87,11 +87,10 @@ class Dimmer(object):
         Handler for a timer event, checks whether to start/stop dimming on
         time-scheduled configuration.
         """
-        if conf.ScheduleEnabled:
-            if self.should_schedule() and not conf.DimmingEnabled:
+        if conf.ScheduleEnabled and not conf.DimmingEnabled:
+            factor, msg = conf.NormalDimmingFactor, "DIMMING OFF"
+            if self.should_schedule():
                 factor, msg = conf.DimmingFactor, "SCHEDULE IN EFFECT"
-            else:
-                factor, msg = conf.NormalDimmingFactor, "DIMMING OFF"
             if factor != self.current_factor:
                 self.apply_factor(factor)
                 self.post_event(msg)
@@ -434,9 +433,10 @@ class NightFall(wx.App):
         panel_buttons.Sizer.AddStretchSpacer()
         panel_buttons.Sizer.Add(button_exit, flag=wx.ALIGN_RIGHT)
         text = wx.StaticText(panel, label=conf.InfoText, style=wx.ALIGN_CENTER)
-        text.Wrap(frame.Size.width)
         text.ForegroundColour = wx.Colour(92, 92, 92)
-        sizer.Add(text, border=3, flag=wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.TOP)
+        text.Wrap(frame.Size.width)
+        sizer.AddStretchSpacer()
+        sizer.Add(text, border=3, flag=wx.GROW | wx.ALL | wx.ALIGN_BOTTOM)
 
         # Position window in lower right corner
         frame.Layout()
@@ -477,7 +477,7 @@ class TimeSelector(wx.PyPanel):
 
     def SetSelections(self, selections):
         """Sets the currently selected time periods, as a list of 0/1."""
-        refresh = (self.selections == selections)
+        refresh = (self.selections != selections)
         self.selections = selections[:]
         if refresh:
             self.Refresh()
@@ -488,18 +488,13 @@ class TimeSelector(wx.PyPanel):
         return self.selections[:]
 
 
-    def GetClientSize(self):
-        """Returns a fixed size for the control."""
+    def GetMinSize(self):
+        """Returns the minimum needed size for the control."""
         best = wx.Size(-1, -1)
         extent = self.GetFullTextExtent("24")#(width, height, descent, leading)
         best.height = (extent[1] + extent[2]) * 2 # label height * 2
         best.width  = len(self.selections) * (extent[0] + 4)
-        self.CacheBestSize(best)
         return best
-
-
-    def DoGetBestSize(self):
-        return self.GetClientSize()
 
 
     def OnPaint(self, event):
@@ -514,7 +509,7 @@ class TimeSelector(wx.PyPanel):
 
     def Draw(self, dc):
         """Draws the custom selector control."""
-        width, height = self.GetClientSize()
+        width, height = self.Size
         if not width or not height:
             return
 
@@ -526,15 +521,19 @@ class TimeSelector(wx.PyPanel):
         # Draw time units in appropriate selected/unselected colour
         for i, on in enumerate(self.selections):
             x = i * unit_width
+            # Last unit can be wider if full width does not divide exactly
+            real_width = unit_width if (i + 1 != len(self.selections)) \
+                         else unit_width + width % len(self.selections)
             colour = unit_colours[1 if on else 0]
             dc.SetBrush(wx.Brush(colour, wx.SOLID))
             dc.SetPen(wx.Pen(colour))
-            dc.DrawRectangle(x, 0, (i + 1) * unit_width, unit_height)
+            dc.DrawRectangle(x, 0, (i + 1) * real_width, unit_height)
         dc.SetTextForeground(wx.Colour(255, 255, 255))
         dc.SetFont(self.Font)
         # Write hours
-        for i, l in enumerate(["%02d" % d for d in range(0, 24)]):
-            dc.DrawText(l, unit_width * i + 2, height - 16 if i % 2 else 2)
+        lead = (unit_width - self.GetFullTextExtent("24")[0]) / 2 # center text
+        for i, t in enumerate(["%02d" % d for d in range(0, 24)]):
+            dc.DrawText(t, unit_width * i + lead, height - 16 if i % 2 else 2)
 
 
     def OnMouseEvent(self, event):
@@ -542,13 +541,14 @@ class TimeSelector(wx.PyPanel):
         if not self.Enabled:
             return
 
-        width, height = self.GetClientSize()
+        width, height = self.Size
         unit_width = width / len(self.selections)
+        # Last unit can be wider if full width does not divide exactly
+        unit = min(len(self.selections) - 1, event.Position.x / unit_width)
 
         refresh = False
         if event.LeftDown():
             self.CaptureMouse()
-            unit = event.Position.x / unit_width
             if 0 <= unit < len(self.selections):
                 self.selections_last = self.selections[:]
                 self.selections[unit] = 1 - self.selections[unit]
@@ -562,7 +562,6 @@ class TimeSelector(wx.PyPanel):
             self.selections_last = None
         elif event.Dragging():
             if self.sticky_value is not None:
-                unit = event.Position.x / unit_width
                 if 0 <= unit < len(self.selections) and unit != self.last_unit:
                     low = min(unit, self.last_unit)
                     hi  = max(unit, self.last_unit) + 1

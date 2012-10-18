@@ -8,8 +8,8 @@ hours. Currently works under Windows, *might* work under Linux/OSX.
 Using The Program
 -----------------
 
-Run "python nightfall.py" under Windows. Or launch nightfall_latest.exe if
-using the precompiled Windows executable.
+Run "python nightfall.py" under Windows, or launch the precompiled
+Windows executable.
 
 
 Dependencies
