@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    17.10.2012
+@modified    18.10.2012
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "0.1.0a"
+Version = "0.1.1a"
 
-VersionDate = "17.10.2012"
+VersionDate = "18.10.2012"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -43,7 +43,7 @@ FileDirectives = [
 ConfigFile = "%s.ini" % os.path.join(ApplicationDirectory, Title.lower())
 
 """Settings window size in pixels, (w, h)."""
-SettingsFrameSize = (-1, -1)
+SettingsFrameSize = (-1, 250)
 
 """Tooltip shown for the tray icon."""
 TrayTooltip = "NightFall (click to toggle options, right-click for menu)"
