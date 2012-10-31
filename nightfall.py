@@ -1,16 +1,17 @@
 #-*- coding: utf-8 -*-
 """
-A tray application that makes screen colors darker and softer during nocturnal
-hours.
+A tray application that can make screen colors darker and softer during
+nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    18.10.2012
+@modified    31.10.2012
 """
 import datetime
 import os
 import sys
 import wx
+import wx.combo
 import wx.lib.newevent
 
 import conf
@@ -172,7 +173,9 @@ class Dimmer(object):
         result = False
         if conf.ScheduleEnabled:
             t = datetime.datetime.now().time()
-            result = bool(conf.Schedule[t.hour])
+            H_MUL = len(conf.Schedule) / 24
+            M_DIV = 60 / H_MUL
+            result = bool(conf.Schedule[t.hour * H_MUL + t.minute / M_DIV])
         return result
 
 
@@ -214,6 +217,7 @@ class NightFall(wx.App):
         frame = self.frame = self.create_frame()
         self.frame_hider = None # wx.CallLater object for timed hiding on blur
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
+        frame.Bind(wx.EVT_COMBOBOX, self.on_stored_factor, frame.combo_factor)
         frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_dimming, frame.cb_enabled)
         frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_startup, frame.cb_startup)
         frame.Bind(wx.EVT_BUTTON,     self.on_toggle_settings, frame.button_ok)
@@ -226,8 +230,13 @@ class NightFall(wx.App):
             frame.Bind(wx.EVT_SLIDER, self.on_change_dimming, s)
         self.Bind(EVT_DIMMER,         self.on_dimmer_event)
 
+        self.TRAYICONS = {False: {}, True: {}}
+        # Cache tray icons in dicts [dimming now][schedule enabled]
+        for i, f in enumerate(conf.TrayIcons):
+            dim, sch = False if i < 2 else True, True if i % 2 else False
+            self.TRAYICONS[dim][sch] = wx.IconFromBitmap(wx.Bitmap(f))
         trayicon = self.trayicon = wx.TaskBarIcon()
-        self.set_tray_icon(conf.TrayIconOff)
+        self.set_tray_icon(self.TRAYICONS[False][False])
         trayicon.Bind(wx.EVT_TASKBAR_LEFT_DOWN, self.on_toggle_settings)
         trayicon.Bind(wx.EVT_TASKBAR_RIGHT_DOWN, self.on_open_tray_menu)
 
@@ -243,34 +252,41 @@ class NightFall(wx.App):
             for i, g in enumerate(data):
                 self.frame.sliders_gamma[i].SetValue(100 * g)
             rgb = [(255 * g) for g in data]
+            tooltip = "#" + "".join(["%02X" % (255 * g) for g in data])
             self.frame.panel_color.SetBackgroundColour(wx.Colour(*rgb))
+            self.frame.panel_color.SetToolTipString(tooltip)
             self.frame.panel_color.Refresh()
         elif "DIMMING TOGGLED" == topic:
             self.frame.cb_enabled.Value = data
-            icon = conf.TrayIconOn if data else conf.TrayIconOff
-            self.set_tray_icon(icon)
+            self.set_tray_icon(self.TRAYICONS[data][conf.ScheduleEnabled])
         elif "SCHEDULE TOGGLED" == topic:
             self.frame.cb_schedule.Value = data
+            self.set_tray_icon(self.TRAYICONS[self.dimmer.should_dim()][data])
         elif "SCHEDULE CHANGED" == topic:
             self.frame.selector_time.SetSelections(data)
         elif "SCHEDULE IN EFFECT" == topic:
-            self.set_tray_icon(conf.TrayIconOnSchedule)
+            self.set_tray_icon(self.TRAYICONS[True][True])
         elif "STARTUP TOGGLED" == topic:
             self.frame.cb_startup.Value = data
         elif "STARTUP POSSIBLE" == topic:
             self.frame.cb_startup.Show(data)
         elif "DIMMING ON" == topic:
-            self.set_tray_icon(conf.TrayIconOn)
+            self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
         elif "DIMMING OFF" == topic:
-            self.set_tray_icon(conf.TrayIconOff)
+            self.set_tray_icon(self.TRAYICONS[False][conf.ScheduleEnabled])
         else:
             print "Unknown topic: ", topic
 
 
-    def set_tray_icon(self, icon_path):
-        """Creates an icon from the specified path and sets it into tray."""
-        icon = wx.IconFromBitmap(wx.Bitmap(icon_path))
+    def set_tray_icon(self, icon):
+        """Sets the icon into tray and sets a configured tooltip."""
         self.trayicon.SetIcon(icon, conf.TrayTooltip)
+
+
+    def on_stored_factor(self, event):
+        """Applies the selected stored dimming factor."""
+        factor = event.GetClientData()
+        self.dimmer.set_factor(factor)
 
 
     def on_open_tray_menu(self, event):
@@ -339,8 +355,7 @@ class NightFall(wx.App):
             new = isinstance(event, wx.ScrollEvent) and s is event.EventObject
             value = event.GetPosition() if new else s.GetValue()
             factor.append(value / 100.0)
-        self.frame.dimming_factor = factor
-        self.dimmer.set_factor(self.frame.dimming_factor)
+        self.dimmer.set_factor(factor)
 
 
     def on_toggle_dimming(self, event):
@@ -367,7 +382,7 @@ class NightFall(wx.App):
         """Creates and returns the settings window."""
         frame = wx.Frame(parent=None, title=conf.Title,
             size=conf.SettingsFrameSize,
-            style=wx.CAPTION | wx.SYSTEM_MENU | wx.CLOSE_BOX
+            style=wx.CAPTION | wx.SYSTEM_MENU | wx.CLOSE_BOX | wx.STAY_ON_TOP
         )
 
         panel = frame.panel = wx.Panel(frame)
@@ -397,13 +412,28 @@ class NightFall(wx.App):
             sliders.append(slider)
             panel_sliders.Sizer.Add(slider, flag=wx.GROW)
         panel_colorpicker.Sizer.Add(panel_sliders, proportion=1, flag=wx.GROW)
-        panel_color = frame.panel_color = wx.Panel(panel_colorpicker)
-        panel_color.Enable(False)
-        panel_color.SetMinSize((50, 60))
+        panel_colorshower = wx.Panel(panel_colorpicker)
+        panel_colorshower.Sizer = wx.BoxSizer(wx.VERTICAL)
+        panel_color = frame.panel_color = wx.Panel(panel_colorshower)
+        panel_color.SetMinSize((60, 60))
         panel_color.SetBackgroundColour(
             wx.Colour(*[(255 * g) for g in conf.DimmingFactor])
         )
-        panel_colorpicker.Sizer.Add(panel_color)
+        combo_factor = frame.combo_factor = \
+            wx.combo.BitmapComboBox(panel_colorshower, size=(60, 15))
+        for i, factor in enumerate(conf.StoredFactors):
+            bmp = wx.EmptyBitmap(170, 13)
+            dc = wx.MemoryDC(bmp)
+            dc.SetBackground(wx.Brush(wx.Colour(*[(255 * f) for f in factor])))
+            dc.Clear()
+            combo_factor.Append("", bmp, "name %s" % i)
+            combo_factor.SetClientData(i, factor)
+            if factor == conf.DimmingFactor:
+                combo_factor.SetSelection(i)
+        combo_factor.SetToolTipString("Choose a preset colour")
+        panel_colorshower.Sizer.Add(panel_color, wx.GROW)
+        panel_colorshower.Sizer.Add(combo_factor)
+        panel_colorpicker.Sizer.Add(panel_colorshower)
 
         # Create time selector and scheduling checkboxes
         panel_time = frame.panel_time = wx.Panel(panel)
@@ -413,7 +443,8 @@ class NightFall(wx.App):
             label="Apply automatically during the highlighted hours:"
         )
         panel_time.Sizer.Add(cb_schedule, border=3, flag=wx.BOTTOM)
-        selector_time = frame.selector_time = TimeSelector(panel_time)
+        selector_time = frame.selector_time = \
+            TimeSelector(panel_time, selections=conf.Schedule)
         panel_time.Sizer.Add(selector_time, flag=wx.GROW)
         cb_startup = frame.cb_startup = wx.CheckBox(
             panel_time, label="Run %s at computer startup" % conf.Title
@@ -425,7 +456,7 @@ class NightFall(wx.App):
         panel_buttons = frame.panel_buttons = wx.Panel(panel)
         panel_buttons.Sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(panel_buttons, border=5, flag=wx.GROW | wx.LEFT | wx.RIGHT)
-        button_ok = frame.button_ok = wx.Button(panel_buttons, label="OK")
+        button_ok = frame.button_ok = wx.Button(panel_buttons,label="Minimize")
         button_exit = frame.button_exit = \
             wx.Button(panel_buttons, label="Exit program")
         button_ok.SetDefault()
@@ -434,9 +465,8 @@ class NightFall(wx.App):
         panel_buttons.Sizer.Add(button_exit, flag=wx.ALIGN_RIGHT)
         text = wx.StaticText(panel, label=conf.InfoText, style=wx.ALIGN_CENTER)
         text.ForegroundColour = wx.Colour(92, 92, 92)
-        text.Wrap(frame.Size.width)
         sizer.AddStretchSpacer()
-        sizer.Add(text, border=3, flag=wx.GROW | wx.ALL | wx.ALIGN_BOTTOM)
+        sizer.Add(text, border=3, flag=wx.ALL | wx.ALIGN_BOTTOM | wx.ALIGN_CENTER)
 
         # Position window in lower right corner
         frame.Layout()
@@ -447,6 +477,7 @@ class NightFall(wx.App):
         icons.AddIcon(wx.IconFromBitmap(wx.Bitmap((conf.SettingsFrameIcon))))
         frame.SetIcons(icons)
 
+        frame.ToggleWindowStyle(wx.STAY_ON_TOP)
         return frame
 
 
@@ -457,17 +488,26 @@ class TimeSelector(wx.PyPanel):
     configured for an hour step.
     """
     def __init__(self, parent, id=-1, pos=wx.DefaultPosition,
-                 size=wx.DefaultSize, style=0, name=wx.PanelNameStr):
+                 size=wx.DefaultSize, style=0, name=wx.PanelNameStr,
+                 selections=[0]*24*4):
+        """
+        @param   selections  the selections to use, as [0,1,] for each time
+                             unit in 24 hours. Length of selections determines
+                             the minimum selectable step. Defaults to a quarter
+                             hour step.
+        """
         wx.PyPanel.__init__(self, parent, id, pos, size,
             style | wx.FULL_REPAINT_ON_RESIZE, name
         )
-        self.selections = [0] * 24  # 24 hours
-        self.selections_last = None # For avoiding redrawing if nothing changed
+        self.selections = selections[:]
 
-        self.sticky_value = None # Value set and held after starting dragging
-        self.last_unit = None     # Index of last changed time unit
+        self.sticky_value  = None # True|False|None if selecting|de-|nothing
+        self.last_unit     = None # Last changed time unit
+        self.penult_unit   = None # Last but one unit, to detect move backwards
+        self.dragback_unit = None # Unit on a section edge dragged backwards
         self.SetInitialSize(self.GetMinSize())
-        self.SetToolTipString("Click and slide to mark/unmark hours")
+        self.SetToolTipString("Click and drag with left or right button to "
+            "select or deselect,\ndouble-click to toggle an hour")
         self.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
         self.AcceptsFocus = self.AcceptsFocusFromKeyboard = lambda: False
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -513,27 +553,46 @@ class TimeSelector(wx.PyPanel):
         if not width or not height:
             return
 
+        colour_off, colour_on = wx.Colour(0,0,0), wx.Colour(0,0,255)
+        colour_text = wx.Colour(255,255,255)
+        dc.SetBackground(wx.Brush(colour_off, wx.SOLID))
         dc.Clear()
 
-        unit_width = width / len(self.selections)
-        unit_height = height
-        unit_colours = [wx.Colour(0, 0, 0), wx.Colour(0, 0, 255)]
-        # Draw time units in appropriate selected/unselected colour
+        # Find enabled sections to simplify drawing
+        sections, start = [], None # sections=[(start, len), ]
         for i, on in enumerate(self.selections):
-            x = i * unit_width
-            # Last unit can be wider if full width does not divide exactly
-            real_width = unit_width if (i + 1 != len(self.selections)) \
-                         else unit_width + width % len(self.selections)
-            colour = unit_colours[1 if on else 0]
-            dc.SetBrush(wx.Brush(colour, wx.SOLID))
-            dc.SetPen(wx.Pen(colour))
-            dc.DrawRectangle(x, 0, (i + 1) * real_width, unit_height)
-        dc.SetTextForeground(wx.Colour(255, 255, 255))
-        dc.SetFont(self.Font)
-        # Write hours
-        lead = (unit_width - self.GetFullTextExtent("24")[0]) / 2 # center text
+            if on and start is None:           # section start
+                start = i
+            elif not on and start is not None: # section end
+                sections.append((start, i - start))
+                start = None
+        if start is not None: # section reached the end
+            sections.append((start, i - start + 1))
+        units_per_pixel = len(self.selections) / float(width)
+        dc.SetBrush(wx.Brush(colour_on, wx.SOLID))
+        dc.SetPen(wx.Pen(colour_on))
+        for start, length in sections:
+            x, xwidth = start / units_per_pixel, length / units_per_pixel
+            if start + length == len(self.selections):
+                xwidth += 1 # Overstep to ensure selection fills the end
+            dc.DrawRectangle(x, 0, xwidth, height)
+
+        # Write hours and draw hour lines
+        hour_y = [2, height - 16] # alternating Y coordinates of hour texts
+        notch_y = [(0, 2), (height - 2, height)] # alternating notch Y1,Y2
+        lead = (width / 24 - self.GetFullTextExtent("24")[0]) / 2 # center text
+        texts, text_xys, notch_xys = [], [], []
         for i, t in enumerate(["%02d" % d for d in range(0, 24)]):
-            dc.DrawText(t, unit_width * i + lead, height - 16 if i % 2 else 2)
+            texts.append(t)
+            x = i * width / 24
+            text_xys.append((x + lead, hour_y[i % 2]))
+            if i: # skip first line for hour 0
+                notch_xys.append((x, notch_y[i % 2][0], x, notch_y[i % 2][1]))
+        dc.SetTextForeground(colour_text)
+        dc.SetPen(wx.Pen(colour_text))
+        dc.SetFont(self.Font)
+        dc.DrawTextList(texts, text_xys)
+        dc.DrawLineList(notch_xys)
 
 
     def OnMouseEvent(self, event):
@@ -542,36 +601,93 @@ class TimeSelector(wx.PyPanel):
             return
 
         width, height = self.Size
-        unit_width = width / len(self.selections)
+        units_per_pixel = len(self.selections) / float(width)
         # Last unit can be wider if full width does not divide exactly
-        unit = min(len(self.selections) - 1, event.Position.x / unit_width)
-
+        unit = min(len(self.selections) - 1,
+                   int(event.Position.x * units_per_pixel))
         refresh = False
-        if event.LeftDown():
+        if event.LeftDown() or event.RightDown():
             self.CaptureMouse()
             if 0 <= unit < len(self.selections):
-                self.selections_last = self.selections[:]
-                self.selections[unit] = 1 - self.selections[unit]
-                self.last_unit, self.sticky_value = unit, self.selections[unit]
-                refresh = True
-        elif event.LeftUp():
+                self.penult_unit = None
+                self.last_unit, self.sticky_value = unit, int(event.LeftDown())
+                self.dragback_unit = None
+                if bool(self.selections[unit]) != event.LeftDown():
+                    self.selections[unit] = self.sticky_value
+                    refresh = True
+        elif event.LeftDClick():
+            # Toggle an entire hour on double-click
+            steps = len(self.selections) / 24
+            low, hi = unit - unit % steps, unit - unit % steps + steps
+            units = self.selections[low:hi]
+            value = int(sum(units) != len(units)) # Toggle off only if all set
+            self.selections[low:hi] = [value] * len(units)
+            refresh = (units != self.selections[low:hi])
+        elif event.LeftUp() or event.RightUp():
             if self.HasCapture():
                 self.ReleaseMouse()
             self.last_unit, self.sticky_value = None, None
-            refresh = (self.selections_last != self.selections)
-            self.selections_last = None
+            self.penult_unit, self.dragback_unit = None, None
         elif event.Dragging():
-            if self.sticky_value is not None:
-                if 0 <= unit < len(self.selections) and unit != self.last_unit:
+            if self.sticky_value is not None and unit != self.last_unit \
+            and 0 <= unit < len(self.selections):
                     low = min(unit, self.last_unit)
                     hi  = max(unit, self.last_unit) + 1
                     units = self.selections[low:hi]
                     self.selections[low:hi] = [self.sticky_value] * len(units)
                     refresh = (units != self.selections[low:hi])
+
+                    # Check if we should drag the enabled edge backwards
+                    if (event.LeftIsDown() and self.penult_unit is not None):
+                        # Did cursor just reverse direction
+                        is_turnabout = \
+                            ((unit < self.last_unit > self.penult_unit)
+                            or (unit > self.last_unit < self.penult_unit))
+                        direction = 1 if (unit > self.last_unit) else -1
+                        # Value to the other side of current moving direction
+                        prev_val = self.selections[unit - direction] \
+                            if 0 <= unit - direction < len(self.selections) \
+                            else None
+                        # The unit right on the other side of the last unit
+                        edge_unit = self.last_unit - direction
+                        # Next unit in the current moving direction
+                        next_unit = unit + direction
+                        # Value of the edge unit, or None if beyond start/end
+                        edge_val = self.selections[edge_unit] if \
+                            (0 <= edge_unit < len(self.selections)) else None
+                        # Value of the next unit, or None if beyond start/end
+                        next_val = self.selections[next_unit] if \
+                            (0 <= next_unit < len(self.selections)) else None
+                        # Drag back if we are already doing so, or if we just
+                        # turned around and the edge unit is off; but only if
+                        # we didn't just turn around during dragging into a
+                        # selected area, or if we are moving away from an edge
+                        # into unselected area.
+                        do_dragback = \
+                            ((self.dragback_unit is not None) or (is_turnabout
+                             and edge_val != self.selections[unit])) \
+                            and not (self.dragback_unit is not None
+                                     and is_turnabout and prev_val) \
+                            and (edge_val is not None or next_val)
+                        if do_dragback:
+                            # Deselect from last to almost current 
+                            low = min(unit - direction, self.last_unit)
+                            hi  = max(unit - direction, self.last_unit) + 1
+                            self.dragback_unit = self.last_unit
+                            self.selections[low:hi] = [0] * abs(hi - low)
+                            refresh = True
+                            if not next_val:
+                                # Stop dragback if reaching a disabled area
+                                self.dragback_unit = None
+                        else:
+                            self.dragback_unit = None
+
+                    self.penult_unit = self.last_unit
                     self.last_unit = unit
         elif event.Leaving():
             if not self.HasCapture():
                 self.last_unit, self.sticky_value = None, None
+                self.penult_unit, self.dragback_unit = None, None
         if refresh:
             self.Refresh()
             event = TimeSelectorEvent()
@@ -620,6 +736,7 @@ class StartupService(object):
             shell = win32com.client.Dispatch("WScript.Shell")
             shortcut = shell.CreateShortCut(path)
             if target.lower().endswith(("py", "pyw")):
+                # pythonw leaves no DOS window open
                 python = sys.executable.replace("python.exe", "pythonw.exe")
                 shortcut.Targetpath = "\"%s\"" % python
                 shortcut.Arguments = "\"%s\"" % target

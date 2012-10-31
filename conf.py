@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    18.10.2012
+@modified    31.10.2012
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "0.1.1a"
+Version = "0.1.2a"
 
-VersionDate = "18.10.2012"
+VersionDate = "31.10.2012"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -28,7 +28,7 @@ if getattr(sys, 'frozen', False):
     ShortcutIconPath = ApplicationPath
     ResourceDirectory = os.path.join(os.environ.get("_MEIPASS2", sys._MEIPASS), "res")
 else:
-    ApplicationDirectory = os.path.dirname(__file__)       # likely relative
+    ApplicationDirectory = os.path.dirname(__file__) # likely relative
     FullDirectory = os.path.dirname(os.path.abspath(__file__))
     ApplicationPath = os.path.join(FullDirectory, "%s.py" % Title.lower())
     ResourceDirectory = os.path.join(FullDirectory, "res")
@@ -43,7 +43,7 @@ FileDirectives = [
 ConfigFile = "%s.ini" % os.path.join(ApplicationDirectory, Title.lower())
 
 """Settings window size in pixels, (w, h)."""
-SettingsFrameSize = (-1, 250)
+SettingsFrameSize = (-1, 260)
 
 """Tooltip shown for the tray icon."""
 TrayTooltip = "NightFall (click to toggle options, right-click for menu)"
@@ -60,9 +60,17 @@ TrayIconOn = os.path.join(ResourceDirectory, "tray_on.png")
 """Tray icon when dimming is disabled."""
 TrayIconOff = os.path.join(ResourceDirectory, "tray_off.png")
 
-"""Tray icon when dimming is disabled."""
-TrayIconOnSchedule = \
-    os.path.join(ResourceDirectory, "tray_schedule.png")
+"""Tray icon when dimming and schedule is on."""
+TrayIconOnScheduled = \
+    os.path.join(ResourceDirectory, "tray_on_scheduled.png")
+
+"""Tray icon when dimming is off and schedule is on."""
+TrayIconOffScheduled = \
+    os.path.join(ResourceDirectory, "tray_off_scheduled.png")
+
+"""List of all tray icons by state, [dimming now|schedule enabled]."""
+TrayIcons = \
+    [TrayIconOff, TrayIconOffScheduled, TrayIconOn, TrayIconOnScheduled]
 
 """
 Valid range for gamma coefficients, as (min, max). Lower coefficients cause the
@@ -74,7 +82,7 @@ ValidGammaRange = (0.23, 1.)
 DimmingEnabled = False
 
 """Whether time-scheduled automatic dimming is enabled."""
-ScheduleEnabled = True
+ScheduleEnabled = False
 
 """Whether NightFall runs at computer startup."""
 StartupEnabled = False
@@ -88,23 +96,25 @@ DefaultDimmingFactor = [0.94, 0.52, 0.45]
 """Gamma coefficients for normal display."""
 NormalDimmingFactor = [1, 1, 1]
 
-"""The dimming schedule, [1,0,..] per each hour."""
+"""Pre-stored dimming factors."""
+StoredFactors = [
+    [0.92, 0.66, 0.55], [0.98, 0.56, 0.40], [0.84, 0.42, 0.26],
+    [0.63, 0.38, 0.30],
+    [0.27, 0.42, 0.63], [0.41, 0.56, 0.84], [0.67, 0.78, 0.92]
+]
+
+"""The dimming schedule, [1,0,..] per each minute."""
 Schedule = []
 
-"""The default dimming schedule, [1,0,..] per each hour."""
-DefaultSchedule = [1] * 6 + [0] * 15 + [1] * 3 # 21->05 on, 06->20 off
-
-
-"""Copyright symbol and year string."""
-Copyright = "\xA9 2012"
+"""
+The default dimming schedule, [1,0,..] per each quarter hour
+(21->05 on, 06->20 off).
+"""
+DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
 
 """Information text shown on settings page."""
-InfoText = ("%(name)s can dim screen color gamma for a more natural feeling" + 
-    " during nocturnal hours. %(copy)s, Erki Suurjaak. Version " + 
-    "%(ver)s, %(date)s.") % {
-    "copy": Copyright.decode("latin1"), "name": Title, "ver": Version,
-    "date": VersionDate
-}
+InfoText = ("%(name)s can dim screen colors for a more natural feeling" + 
+    " during late hours.") % {"name": Title}
 
 
 def load():

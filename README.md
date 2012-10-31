@@ -1,8 +1,8 @@
 NightFall
 ===========
 
-A small program for making screen colours darker and softer during nocturnal
-hours. Currently works under Windows, *might* work under Linux/OSX.
+A small tray program for making screen colours darker and softer during
+late hours. Currently works under Windows, *might* work under Linux/OSX.
 
 
 Using The Program
