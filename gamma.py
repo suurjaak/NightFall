@@ -3,7 +3,7 @@
 Functionality for handling screen device gamma ramps.
 
 Accessing device ramp functionality mostly from PsychoPy, (c) Jonathan Peirce,
-formatting Windows errors from python-ldap, (c) Jason R. Coombs, both
+formatting Windows errors from Windows Routines by Jason R. Coombs, both
 released under compatible open source licences.
 
 @from SetDeviceGammaRamp function Windows documentation:

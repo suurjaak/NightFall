@@ -8,10 +8,10 @@ late hours. Currently works under Windows, *might* work under Linux/OSX.
 Using The Program
 -----------------
 
-Run "python nightfall.py" under Windows, or launch the precompiled
-Windows executable. It will stay in the system tray as a grey or orange
-moon icon, depending on being active, and will dim the screen on command
-or according to hours scheduled in settings.
+Run "python nightfall.py", or launch the precompiled Windows executable.
+It will stay in the system tray as a grey or orange moon icon, depending on
+being active, and will dim the screen on command or according to hours
+scheduled in settings.
 
 
 Dependencies
@@ -27,10 +27,12 @@ and uses these 3rd-party Python packages:
 Attribution
 -----------
 
-NightFall includes a modified version of the psychopy.gamma module in
-gamma.py, from PsychoPy 1.75
-(http://www.psychopy.org/epydoc/psychopy.gamma-pysrc.html).
-PsychoPy is released under the compatible GNU General Public License v3.
+NightFall includes bits of code in gamma.py from the psychopy.gamma module,
+from PsychoPy 1.75 (http://www.psychopy.org/epydoc/psychopy.gamma-pysrc.html),
+released under the compatible GNU General Public License v3;
+and from Windows Routines 2.2.1 by Jason R. Coombs,
+(http://pydoc.net/jaraco.windows/2.2.1/jaraco.windows.error), released under
+the MIT License.
 
 
 License
