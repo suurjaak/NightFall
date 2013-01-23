@@ -9,7 +9,9 @@ Using The Program
 -----------------
 
 Run "python nightfall.py" under Windows, or launch the precompiled
-Windows executable.
+Windows executable. It will stay in the system tray as a grey or orange
+moon icon, depending on being active, and will dim the screen on command
+or according to hours scheduled in settings.
 
 
 Dependencies

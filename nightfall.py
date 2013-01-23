@@ -5,13 +5,19 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    31.10.2012
+@modified    23.01.2013
 """
 import datetime
+import math
 import os
 import sys
 import wx
 import wx.combo
+import wx.lib.agw.aquabutton
+import wx.lib.agw.flatnotebook
+import wx.lib.agw.gradientbutton
+import wx.lib.agw.thumbnailctrl
+import wx.lib.agw.ultimatelistctrl
 import wx.lib.newevent
 
 import conf
@@ -29,7 +35,12 @@ class Dimmer(object):
     def __init__(self, event_handler):
         conf.load()
         self.handler = event_handler
-        self.current_factor = None # Currently applied dimming factor
+        self.current_factor = conf.NormalDimmingFactor # Current screen factor
+        self.fade_timer = None # wx.Timer instance for applying fading
+        self.fade_steps = None # Number of steps to take during a fade
+        self.fade_delta = None # Delta to add to factor elements on fade step
+        self.fade_target_factor = None # Final factor values during fade
+        self.fade_current_factor = None # Factor float values during fade
         self.service = StartupService()
         self.check_conf()
         self.timer = wx.Timer()
@@ -42,9 +53,9 @@ class Dimmer(object):
         if not isinstance(conf.DimmingFactor, list) \
         or len(conf.DimmingFactor) != len(conf.DefaultDimmingFactor):
             conf.DimmingFactor = conf.DefaultDimmingFactor[:]
-        for i, g in enumerate(conf.DimmingFactor):
+        for i, g in enumerate(conf.DimmingFactor[1:]):
             if not isinstance(g, (int, float)) \
-            or not (conf.ValidGammaRange[0] <= g <= conf.ValidGammaRange[-1]):
+            or not (conf.ValidColourRange[0] <= g <= conf.ValidColourRange[-1]):
                 conf.DimmingFactor[i] = conf.DefaultDimmingFactor[i]
         if not isinstance(conf.Schedule, list) \
         or len(conf.Schedule) != len(conf.DefaultSchedule):
@@ -64,12 +75,13 @@ class Dimmer(object):
         self.post_event("STARTUP TOGGLED",  conf.StartupEnabled)
         self.post_event("STARTUP POSSIBLE", self.service.can_start())
         if self.should_dim():
-            self.apply_factor(conf.DimmingFactor)
+            self.apply_factor(conf.DimmingFactor, fade=True)
             msg = "SCHEDULE IN EFFECT" if self.should_schedule() \
                   else "DIMMING ON"
             self.post_event(msg, conf.DimmingFactor)
         else:
             self.apply_factor(conf.NormalDimmingFactor)
+
 
     def stop(self):
         """Stops any current dimming."""
@@ -77,9 +89,9 @@ class Dimmer(object):
         conf.save()
 
 
-    def post_event(self, topic, data=None):
+    def post_event(self, topic, data=None, info=None):
         """Sends a message event to the event handler."""
-        event = DimmerEvent(Topic=topic, Data=data)
+        event = DimmerEvent(Topic=topic, Data=data, Info=info)
         wx.PostEvent(self.handler, event)
 
 
@@ -93,24 +105,25 @@ class Dimmer(object):
             if self.should_schedule():
                 factor, msg = conf.DimmingFactor, "SCHEDULE IN EFFECT"
             if factor != self.current_factor:
-                self.apply_factor(factor)
+                self.apply_factor(factor, fade=True)
                 self.post_event(msg)
 
 
-    def set_factor(self, factor):
+    def set_factor(self, factor, info=None):
         """
         Sets the current screen dimming factor, and applies it if enabled.
 
-        @param   factor  a triple of gamma correction values for respective RGB
-                 channels, 0..1
+        @param   factor       a 4-byte list, for 3 RGB channels and brightness,
+                              0..255
+        @param   info         info given to callback event, if any
         """
-        changed = (factor != conf.DimmingFactor)
+        changed = (factor != self.current_factor)
         if changed:
             conf.DimmingFactor = factor[:]
-            if self.should_dim():
-                self.apply_factor(factor)
+            self.post_event("FACTOR CHANGED", conf.DimmingFactor, info)
             conf.save()
-        self.post_event("FACTOR CHANGED", conf.DimmingFactor)
+            if self.should_dim():
+                self.apply_factor(factor, info)
 
 
     def toggle_schedule(self, enabled):
@@ -179,13 +192,54 @@ class Dimmer(object):
         return result
 
 
-    def apply_factor(self, factor):
-        """Applies the specified dimming factor."""
-        try:
-            gamma.setGamma(factor)
+    def apply_factor(self, factor, info=None, fade=False):
+        """
+        Applies the specified dimming factor.
+
+        @param   info         info given to callback event, if any
+        @param   fade         if True, changes factor from current to new in a
+                              number of steps smoothly
+        """
+        if self.fade_timer:
+            self.fade_timer.Stop()
+            self.fade_delta = self.fade_steps = self.fade_timer = None
+            self.fade_target_factor = None
+        if fade or (info and "APPLY DETAILED" != info):
+            self.fade_steps = conf.FadeSteps
+            self.fade_target_factor = factor[:]
+            self.fade_current_factor = map(float, self.current_factor)
+            self.fade_delta = []
+            for i, (new, now) in enumerate(zip(factor, self.current_factor)):
+                self.fade_delta.append(float(new - now) / conf.FadeSteps)
+            self.fade_timer = wx.CallLater(conf.FadeDelay, self.fade_step)
+        elif gamma.set_screen_factor(factor):
             self.current_factor = factor[:]
-        except Exception, e:
-            print e, factor
+            self.post_event("FACTOR SUCCEEDED", conf.DimmingFactor, info)
+        else:
+            self.post_event("FACTOR FAILED", conf.DimmingFactor, info)
+
+
+
+    def fade_step(self):
+        """
+        Handler for a fade step, applies the fade delta to screen factor and
+        schedules another event, if more steps left.
+        """
+        self.fade_timer = None
+        if self.fade_steps:
+            self.fade_current_factor = [(current + delta) for current, delta
+                in zip(self.fade_current_factor, self.fade_delta)]
+            if 1 == self.fade_steps:
+                # Final step: use exact given target, to avoid rounding errors
+                self.set_factor(self.fade_target_factor)
+            self.set_factor(map(int, map(round, self.fade_current_factor)))
+            self.fade_steps -= 1
+            if self.fade_steps:
+                self.fade_timer = wx.CallLater(conf.FadeDelay, self.fade_step)
+            else:
+                self.fade_delta = self.fade_steps = None
+                self.fade_target_factor = None
+
 
 
     def toggle_dimming(self, enabled):
@@ -216,18 +270,25 @@ class NightFall(wx.App):
 
         frame = self.frame = self.create_frame()
         self.frame_hider = None # wx.CallLater object for timed hiding on blur
+        self.frame_shower = None # wx.CallLater object for timed showing on slideout
+        self.frame_pos_orig = None # Position of frame before slidein
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
-        frame.Bind(wx.EVT_COMBOBOX, self.on_stored_factor, frame.combo_factor)
+        frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED, self.on_change_stored_factor, frame.list_factors._scrolled)
+        frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_DCLICK, self.on_stored_factor, frame.list_factors._scrolled)
+
         frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_dimming, frame.cb_enabled)
         frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_startup, frame.cb_startup)
         frame.Bind(wx.EVT_BUTTON,     self.on_toggle_settings, frame.button_ok)
         frame.Bind(wx.EVT_BUTTON,     self.on_exit, frame.button_exit)
+        frame.Bind(wx.EVT_BUTTON,     self.on_stored_factor, frame.button_saved_apply)
+        frame.Bind(wx.EVT_BUTTON,     self.on_delete_factor, frame.button_saved_delete)
+        frame.Bind(wx.EVT_BUTTON,     self.on_save_factor, frame.button_save)
         frame.Bind(EVT_TIME_SELECTOR, self.on_change_schedule)
         frame.Bind(wx.EVT_CLOSE,      self.on_toggle_settings)
         frame.Bind(wx.EVT_ACTIVATE,   self.on_deactivate_settings)
-        for s in frame.sliders_gamma:
-            frame.Bind(wx.EVT_SCROLL, self.on_change_dimming, s)
-            frame.Bind(wx.EVT_SLIDER, self.on_change_dimming, s)
+        for s in frame.sliders_factor:
+            frame.Bind(wx.EVT_SCROLL, self.on_change_factor_detail, s)
+            frame.Bind(wx.EVT_SLIDER, self.on_change_factor_detail, s)
         self.Bind(EVT_DIMMER,         self.on_dimmer_event)
 
         self.TRAYICONS = {False: {}, True: {}}
@@ -241,21 +302,43 @@ class NightFall(wx.App):
         trayicon.Bind(wx.EVT_TASKBAR_RIGHT_DOWN, self.on_open_tray_menu)
 
         self.dimmer.start()
-        frame.Show()
+        if conf.StartMinimizedParameter not in sys.argv:
+            frame.Show()
         return True
 
 
     def on_dimmer_event(self, event):
         """Handler for all events sent from Dimmer."""
-        topic, data = event.Topic, event.Data
+        topic, data, info = event.Topic, event.Data, event.Info
         if "FACTOR CHANGED" == topic:
             for i, g in enumerate(data):
-                self.frame.sliders_gamma[i].SetValue(100 * g)
-            rgb = [(255 * g) for g in data]
-            tooltip = "#" + "".join(["%02X" % (255 * g) for g in data])
-            self.frame.panel_color.SetBackgroundColour(wx.Colour(*rgb))
-            self.frame.panel_color.SetToolTipString(tooltip)
-            self.frame.panel_color.Refresh()
+                self.frame.sliders_factor[i].SetValue(g)
+            if "APPLY DETAILED" == info and not self.dimmer.should_dim():
+                # If dimming is off, success/failure events will not follow
+                self.frame.bmp_detail.SetBitmap(get_factor_bitmap(data))
+                self.frame.bmp_detail.SetToolTipString(get_factor_str(data))
+        elif "FACTOR SUCCEEDED" == topic:
+            pass
+            bmp, tooltip = get_factor_bitmap(data), get_factor_str(data)
+            self.frame.bmp_config.SetBitmap(bmp)
+            self.frame.bmp_detail.SetBitmap(bmp)
+            self.frame.bmp_config.SetToolTipString(tooltip)
+            self.frame.bmp_detail.SetToolTipString(tooltip)
+        elif "FACTOR FAILED" == topic:
+            bmp = get_factor_bitmap(data, False)
+            tooltip = get_factor_str(data, False)
+            self.frame.bmp_config.SetBitmap(bmp)
+            self.frame.bmp_detail.SetBitmap(bmp)
+            self.frame.bmp_config.SetToolTipString(tooltip)
+            self.frame.bmp_detail.SetToolTipString(tooltip)
+            if "APPLY SAVED" == info:
+                for i, factor in enumerate(conf.StoredFactors):
+                    if factor == data:
+                        thumb = self.frame.list_factors.GetItem(i)
+                        thumb.SetBitmap(bmp)
+                wx.MessageBox(
+                    "This factor is not supported by graphics hardware.",
+                    conf.Title, wx.OK | wx.ICON_WARNING)
         elif "DIMMING TOGGLED" == topic:
             self.frame.cb_enabled.Value = data
             self.set_tray_icon(self.TRAYICONS[data][conf.ScheduleEnabled])
@@ -283,10 +366,68 @@ class NightFall(wx.App):
         self.trayicon.SetIcon(icon, conf.TrayTooltip)
 
 
+    def on_change_stored_factor(self, event):
+        selected = self.frame.list_factors.GetSelection()
+        enabled = (selected >= 0)
+        if enabled and not self.frame.button_saved_apply.Enabled:
+            self.frame.button_saved_apply.Enabled = True
+            self.frame.button_saved_delete.Enabled = True
+        elif not enabled and self.frame.button_saved_apply.Enabled:
+            self.frame.button_saved_apply.Enabled = False
+            self.frame.button_saved_delete.Enabled = False
+        event.Skip()
+
+
     def on_stored_factor(self, event):
         """Applies the selected stored dimming factor."""
-        factor = event.GetClientData()
-        self.dimmer.set_factor(factor)
+        selected = self.frame.list_factors.GetSelection()
+        if selected >= 0:
+            factor = self.frame.list_factors.GetThumbFactor(selected)
+            if not self.dimmer.should_dim():
+                conf.DimmingEnabled = True
+                self.frame.cb_enabled.Value = True
+                self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
+            self.dimmer.set_factor(factor, "APPLY SAVED")
+
+
+    def on_save_factor(self, event):
+        """Stores the currently set rgb-brightness values."""
+        factor = conf.DimmingFactor
+        if factor not in conf.StoredFactors:
+            filename = str(bytearray(factor)).decode("latin1")
+            thumb = wx.lib.agw.thumbnailctrl.Thumb(self, folder="",
+                filename=filename, caption=filename)
+            bmp = get_factor_bitmap(factor)
+            lst = self.frame.list_factors
+            lst.RegisterBitmap(filename, bmp, factor)
+            thumbs = [lst.GetItem(i) for i in range(lst.GetItemCount())]
+            thumbs.append(thumb)
+            lst.ShowThumbs(thumbs, caption="")
+            conf.StoredFactors.append(factor)
+            conf.save()
+            wx.MessageBox("Factor added to saved factors.",
+                conf.Title, wx.OK | wx.ICON_INFORMATION)
+        else:
+            wx.MessageBox("Factor already in saved factors.",
+                conf.Title, wx.OK | wx.ICON_WARNING)
+
+
+    def on_delete_factor(self, event):
+        """Deletes the stored factor, if confirmed."""
+        selected = self.frame.list_factors.GetSelection()
+        if selected >= 0:
+            if wx.OK == wx.MessageBox(
+                "Remove this factor from list?",
+                conf.Title, wx.OK | wx.CANCEL | wx.ICON_QUESTION
+            ):
+                factor = self.frame.list_factors.GetThumbFactor(selected)
+                if factor in conf.StoredFactors:
+                    conf.StoredFactors.remove(factor)
+                    conf.save()
+                thumb_ctrl = self.frame.list_factors.GetItem(selected)
+                self.frame.list_factors.UnregisterBitmap(thumb_ctrl.GetFileName())
+                self.frame.list_factors.RemoveItemAt(selected)
+                self.frame.list_factors.Refresh()
 
 
     def on_open_tray_menu(self, event):
@@ -322,14 +463,67 @@ class NightFall(wx.App):
 
     def on_deactivate_settings(self, event):
         """Handler for deactivating settings window, hides it if focus lost."""
-        if not event.Active and not self.frame_hider:
+        if self.frame.Shown \
+        and not (event.Active or self.frame_hider or self.frame_shower):
             millis = conf.SettingsFrameTimeout
             if millis: # Hide if timeout positive
-                self.frame_hider = wx.CallLater(millis, self.frame.Hide)
+                #self.frame_hider = wx.CallLater(millis, self.frame.Hide)
+                self.frame_hider = wx.CallLater(millis, self.settings_slidein)
         elif event.Active: # kill the hiding timeout, if any
             if self.frame_hider:
                 self.frame_hider.Stop()
                 self.frame_hider = None
+                if self.frame_pos_orig:
+                    self.frame.Position = self.frame_pos_orig
+                    self.frame_pos_orig = None
+
+
+    def settings_slidein(self):
+        """
+        Slides the settings out of view into the screen edge, incrementally,
+        using callbacks.
+        """
+        y = self.frame.Position.y
+        display_h = wx.GetDisplaySize().height
+        if y < display_h:
+            if not self.frame_pos_orig:
+                self.frame_pos_orig = self.frame.Position
+            self.frame.Position = (self.frame.Position.x, y + conf.SettingsFrameSlideInStep)
+            self.frame_hider = wx.CallLater(conf.SettingsFrameSlideDelay, self.settings_slidein)
+        else:
+            self.frame_hider = None
+            self.frame.Hide()
+            x1, y1, x2, y2 = wx.GetClientDisplayRect()
+            self.frame.Position = self.frame_pos_orig if self.frame_pos_orig \
+                else (x2 - self.frame.Size.x, y2 - self.frame.Size.y)
+            self.frame_pos_orig = None
+
+
+    def settings_slideout(self):
+        """
+        Slides the settings into view out from the screen, incrementally,
+        using callbacks.
+        """
+        h = self.frame.Size.height
+        display_h = wx.GetClientDisplayRect().height
+        #print "settings_slideout, pos=%s, h=%s, display_h=%s" % (self.frame.Position, h, display_h)
+        if not self.frame_pos_orig:
+            self.frame_pos_orig = self.frame.Position.x, display_h - h
+            self.frame.Position = self.frame_pos_orig[0], display_h
+            #print "setting frame_pos_orig to %s and frame pos to %s" % (self.frame_pos_orig, self.frame.Position)
+        y = self.frame.Position.y
+        if not self.frame.Shown:
+            self.frame.Show()
+        if (y + h > display_h):
+            #print "sliding out, as %s + %s > %s" % (y, h, display_h)
+            #print "moving frame out to %s" % self.frame.Position
+            self.frame.Position = (self.frame.Position.x, y - conf.SettingsFrameSlideOutStep)
+            self.frame_shower = wx.CallLater(conf.SettingsFrameSlideDelay, self.settings_slideout)
+        else:
+            #print "disabling frame_shower, as we're there (%s)" % self.frame.Position
+            self.frame_shower = None
+            self.frame_pos_orig = None
+            self.frame.Raise()
 
 
     def on_exit(self, event):
@@ -343,19 +537,51 @@ class NightFall(wx.App):
 
     def on_toggle_settings(self, event):
         """Handler for clicking to toggle settings window visible/hidden."""
-        self.frame.Shown = not self.frame.Shown
+        if self.frame_hider: # Window is sliding closed
+            self.frame_hider.Stop()
+            if self.frame_pos_orig:
+                # Sliding was already happening: move back to original place
+                self.frame.Position = self.frame_pos_orig
+            else:
+                # Window was shown: toggle window off
+                self.frame.Hide()
+            self.frame_hider = None
+            self.frame_pos_orig = None
+        elif self.frame_shower: # Window is sliding open
+            self.frame_shower.Stop()
+            self.frame_shower = None
+            millis = conf.SettingsFrameTimeout
+            if millis: # Hide if timeout positive
+                if conf.SettingsFrameSlideInEnabled:
+                    self.frame_hider = wx.CallLater(millis,
+                                                    self.settings_slidein)
+                else:
+                    self.frame_hider = wx.CallLater(millis, self.frame.Hide)
+            else:
+                self.frame.Hide()
+                self.frame.Position = self.frame_pos_orig
+        else:
+            if not self.frame.Shown:
+                if conf.SettingsFrameSlideOutEnabled:
+                    self.frame_shower = wx.CallLater(
+                        conf.SettingsFrameSlideDelay, self.settings_slideout)
+                else:
+                    self.frame.Shown = True
+            else:
+                self.frame.Shown = not self.frame.Shown
         if self.frame.Shown:
             self.frame.Raise()
 
 
-    def on_change_dimming(self, event):
-        """Handler for a change in dimming factor properties."""
+
+    def on_change_factor_detail(self, event):
+        """Handler for a change in screen factor properties."""
         factor = []
-        for i, s in enumerate(self.frame.sliders_gamma):
+        for i, s in enumerate(self.frame.sliders_factor):
             new = isinstance(event, wx.ScrollEvent) and s is event.EventObject
             value = event.GetPosition() if new else s.GetValue()
-            factor.append(value / 100.0)
-        self.dimmer.set_factor(factor)
+            factor.append(value)
+        self.dimmer.set_factor(factor, "APPLY DETAILED")
 
 
     def on_toggle_dimming(self, event):
@@ -393,80 +619,183 @@ class NightFall(wx.App):
         cb_enabled.ToolTipString = "Apply dimming settings now"
         sizer.Add(cb_enabled, border=5, flag=wx.ALL)
 
-        # Create RGB sliders and color sample panel
-        panel_colorpicker = frame.panel_colorpicker = wx.Panel(panel)
+        notebook = frame.notebook = wx.lib.agw.flatnotebook.FlatNotebook(panel)
+        notebook.SetAGWWindowStyleFlag(
+              wx.lib.agw.flatnotebook.FNB_FANCY_TABS
+            | wx.lib.agw.flatnotebook.FNB_NO_X_BUTTON
+            | wx.lib.agw.flatnotebook.FNB_NO_NAV_BUTTONS
+            | wx.lib.agw.flatnotebook.FNB_NODRAG
+            | wx.lib.agw.flatnotebook.FNB_NO_TAB_FOCUS)
+        notebook.SetGradientColourFrom(wx.Colour(255, 255, 255))
+        notebook.SetGradientColourTo(notebook.Parent.BackgroundColour)
+        notebook.SetNonActiveTabTextColour(wx.Colour(128, 128, 128))
+        sizer.Add(notebook, border=5, flag=wx.GROW | wx.LEFT | wx.RIGHT)
+
+        panel_config = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
+        panel_config.Sizer = wx.BoxSizer(wx.VERTICAL)
+        panel_config.BackgroundColour = wx.WHITE
+        notebook.AddPage(panel_config, "Configuration ")
+        panel_savedfactors = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
+        panel_savedfactors.Sizer = wx.BoxSizer(wx.VERTICAL)
+        panel_savedfactors.BackgroundColour = wx.WHITE
+        notebook.AddPage(panel_savedfactors, "Saved factors ")
+        panel_detailedfactor = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
+        panel_detailedfactor.Sizer = wx.BoxSizer(wx.VERTICAL)
+        panel_detailedfactor.BackgroundColour = wx.WHITE
+        notebook.AddPage(panel_detailedfactor, "Expert settings ")
+
+
+        # Create config page, with time selector and scheduling checkboxes
+        text = wx.StaticText(panel_config, label=conf.InfoText,
+                             style=wx.ALIGN_CENTER)
+        text.ForegroundColour = wx.Colour(92, 92, 92)
+        panel_config.Sizer.Add(text, border=5, flag=wx.ALL | wx.ALIGN_CENTER)
+        panel_config.Sizer.AddStretchSpacer()
+        panel_factor = wx.Panel(panel_config)
+        panel_factor.Sizer = wx.BoxSizer(wx.HORIZONTAL)
+        panel_factor.Sizer.AddStretchSpacer()
+        panel_factor.Sizer.Add(wx.StaticText(panel_factor,
+            label="Currently selected screen factor:"), border=5,
+            flag=wx.ALL | wx.ALIGN_RIGHT)
+        frame.bmp_config = wx.StaticBitmap(panel_factor,
+            bitmap=get_factor_bitmap(conf.DimmingFactor))
+        frame.bmp_config.SetToolTipString(get_factor_str(conf.DimmingFactor))
+        panel_factor.Sizer.Add(frame.bmp_config, flag=wx.ALIGN_RIGHT)
+        panel_config.Sizer.Add(panel_factor, border=5, flag=wx.GROW | wx.ALL)
+
+        panel_time = frame.panel_time = wx.Panel(panel_config)
+        panel_time.Sizer = wx.BoxSizer(wx.VERTICAL)
+        cb_schedule = frame.cb_schedule = wx.CheckBox(panel_time,
+            label="Apply automatically during the highlighted hours:"
+        )
+        panel_time.Sizer.Add(cb_schedule, border=3, flag=wx.ALL)
+        selector_time = frame.selector_time = \
+            TimeSelector(panel_time, selections=conf.Schedule)
+        panel_time.Sizer.Add(selector_time, border=10, flag=wx.GROW)
+        panel_config.Sizer.Add(panel_time, border=5, flag=wx.GROW | wx.ALL)
+        panel_config.Sizer.AddStretchSpacer()
+
+        panel_version = wx.Panel(panel_config)
+        panel_version.Sizer = wx.BoxSizer(wx.HORIZONTAL)
+        cb_startup = frame.cb_startup = wx.CheckBox(
+            panel_version, label="Run %s at computer startup" % conf.Title
+        )
+        cb_startup.ToolTipString = "Adds NightFall to startup programs"
+        panel_version.Sizer.Add(cb_startup, border=5, flag=wx.LEFT)
+        panel_version.Sizer.AddStretchSpacer()
+        text = wx.StaticText(panel_version,
+            label="v%s, %s   " % (conf.Version, conf.VersionDate))
+        text.ForegroundColour = wx.Colour(92, 92, 92)
+        panel_version.Sizer.Add(text, flag=wx.ALIGN_RIGHT)
+        frame.link_www = wx.HyperlinkCtrl(panel_version, id=-1,
+            label="github", url=conf.HomeUrl)
+        frame.link_www.ToolTipString = "Go to source code repository " \
+                                      "at %s" % conf.HomeUrl
+        panel_version.Sizer.Add(frame.link_www, border=5,
+                                flag=wx.ALIGN_RIGHT | wx.RIGHT)
+        panel_config.Sizer.Add(panel_version, border=2, flag=wx.GROW | wx.ALL)
+
+
+        # Create saved factors page
+        list_factors = frame.list_factors = BitmapListCtrl(panel_savedfactors)
+        list_factors.MinSize = (-1, 180)
+        thumbs = []
+        for i, factor in enumerate(conf.StoredFactors):
+            bmp = get_factor_bitmap(factor)
+            filename = str(bytearray(factor)).decode("latin1")
+            list_factors.RegisterBitmap(filename, bmp, factor)
+            thumbs.append(wx.lib.agw.thumbnailctrl.Thumb(list_factors, folder="",
+                filename=filename, caption=filename))
+        list_factors.ShowThumbs(thumbs, caption="")
+        panel_savedfactors.Sizer.Add(frame.list_factors, proportion=1,
+                                     border=1, flag=wx.GROW | wx.LEFT)
+        panel_saved_buttons = wx.Panel(panel_savedfactors)
+        panel_saved_buttons.Sizer = wx.BoxSizer(wx.HORIZONTAL)
+        panel_savedfactors.Sizer.Add(panel_saved_buttons, border=5,
+                                     flag=wx.GROW | wx.ALL)
+        button_apply = frame.button_saved_apply = \
+            wx.Button(panel_saved_buttons, label="Apply factor")
+        button_delete = frame.button_saved_delete = \
+            wx.Button(panel_saved_buttons, label="Remove factor")
+        button_apply.Enabled = button_delete.Enabled = False
+        panel_saved_buttons.Sizer.Add(button_apply)
+        panel_saved_buttons.Sizer.AddStretchSpacer()
+        panel_saved_buttons.Sizer.Add(button_delete, flag=wx.ALIGN_RIGHT)
+
+        # Create expert settings page, with RGB sliders and color sample panel
+        text_detail = wx.StaticText(panel_detailedfactor,
+            style=wx.ALIGN_CENTER, label=conf.InfoDetailedText)
+        text_detail.ForegroundColour = wx.Colour(92, 92, 92)
+        panel_detailedfactor.Sizer.Add(text_detail, border=5,
+            flag=wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+        panel_detailedfactor.Sizer.AddStretchSpacer()
+        panel_colorpicker = frame.panel_colorpicker = \
+            wx.Panel(panel_detailedfactor)
         panel_colorpicker.Sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(panel_colorpicker, border=5, flag=wx.GROW | wx.ALL)
+        panel_detailedfactor.Sizer.Add(panel_colorpicker, border=5,
+                                       flag=wx.GROW | wx.ALL)
+
         panel_sliders = frame.panel_sliders = wx.Panel(panel_colorpicker)
-        panel_sliders.Sizer = wx.BoxSizer(wx.VERTICAL)
-        sliders = frame.sliders_gamma = []
-        colourtexts = ["red", "green", "blue"]
-        for i in range(3):
+        panel_sliders.Sizer = wx.FlexGridSizer(rows=5, cols=2, vgap=0, hgap=5)
+        panel_sliders.Sizer.AddGrowableCol(1, proportion=1)
+        sliders = frame.sliders_factor = []
+        for i, text in enumerate(["brightness", "red", "green", "blue"]):
+            panel_sliders.Sizer.Add(wx.StaticText(panel_sliders,
+                label=text.capitalize() + ":"))
             slider = wx.Slider(panel_sliders,
-                minValue=conf.ValidGammaRange[0] * 100,
-                maxValue=conf.ValidGammaRange[-1] * 100,
-                value=conf.DimmingFactor[i] * 100,
+                minValue=conf.ValidColourRange[0] if i else 0,    # Brightness
+                maxValue=conf.ValidColourRange[-1] if i else 255, # goes 0..255
+                value=conf.DimmingFactor[i],
                 size=(-1, 20)
             )
-            slider.ToolTipString = "Change %s colour channel" % colourtexts[i]
+            tooltip = "Change %s colour channel" % text if i \
+                      else "Change brightness (center is default, higher " \
+                           "goes brighter than normal)"
+            slider.ToolTipString = tooltip
             sliders.append(slider)
-            panel_sliders.Sizer.Add(slider, flag=wx.GROW)
+            panel_sliders.Sizer.Add(slider, proportion=1, flag=wx.GROW)
+        panel_sliders.Sizer.AddSpacer(0)
+        button_save = frame.button_save = wx.Button(panel_sliders,
+                                                    label="Save factor")
+        panel_sliders.Sizer.Add(button_save, border=5,
+                                flag=wx.ALIGN_RIGHT | wx.RIGHT | wx.BOTTOM)
+
         panel_colorpicker.Sizer.Add(panel_sliders, proportion=1, flag=wx.GROW)
         panel_colorshower = wx.Panel(panel_colorpicker)
         panel_colorshower.Sizer = wx.BoxSizer(wx.VERTICAL)
         panel_color = frame.panel_color = wx.Panel(panel_colorshower)
+        panel_color.Sizer = wx.BoxSizer(wx.VERTICAL)
         panel_color.SetMinSize((60, 60))
-        panel_color.SetBackgroundColour(
-            wx.Colour(*[(255 * g) for g in conf.DimmingFactor])
-        )
-        combo_factor = frame.combo_factor = \
-            wx.combo.BitmapComboBox(panel_colorshower, size=(60, 15))
-        for i, factor in enumerate(conf.StoredFactors):
-            bmp = wx.EmptyBitmap(170, 13)
-            dc = wx.MemoryDC(bmp)
-            dc.SetBackground(wx.Brush(wx.Colour(*[(255 * f) for f in factor])))
-            dc.Clear()
-            combo_factor.Append("", bmp, "name %s" % i)
-            combo_factor.SetClientData(i, factor)
-            if factor == conf.DimmingFactor:
-                combo_factor.SetSelection(i)
-        combo_factor.SetToolTipString("Choose a preset colour")
+        frame.bmp_detail = wx.StaticBitmap(panel_color,
+            bitmap=get_factor_bitmap(conf.DimmingFactor))
+        panel_color.Sizer.Add(frame.bmp_detail,flag=wx.ALIGN_RIGHT)
         panel_colorshower.Sizer.Add(panel_color, wx.GROW)
-        panel_colorshower.Sizer.Add(combo_factor)
         panel_colorpicker.Sizer.Add(panel_colorshower)
 
-        # Create time selector and scheduling checkboxes
-        panel_time = frame.panel_time = wx.Panel(panel)
-        panel_time.Sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(panel_time, border=5, flag=wx.GROW | wx.LEFT | wx.RIGHT)
-        cb_schedule = frame.cb_schedule = wx.CheckBox(panel_time,
-            label="Apply automatically during the highlighted hours:"
-        )
-        panel_time.Sizer.Add(cb_schedule, border=3, flag=wx.BOTTOM)
-        selector_time = frame.selector_time = \
-            TimeSelector(panel_time, selections=conf.Schedule)
-        panel_time.Sizer.Add(selector_time, flag=wx.GROW)
-        cb_startup = frame.cb_startup = wx.CheckBox(
-            panel_time, label="Run %s at computer startup" % conf.Title
-        )
-        cb_startup.ToolTipString = "Adds NightFall to startup programs"
-        panel_time.Sizer.Add(cb_startup, border=5, flag=wx.BOTTOM | wx.TOP)
-
-        # Create buttons and infotext
+        sizer.AddStretchSpacer()
         panel_buttons = frame.panel_buttons = wx.Panel(panel)
         panel_buttons.Sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(panel_buttons, border=5, flag=wx.GROW | wx.LEFT | wx.RIGHT)
-        button_ok = frame.button_ok = wx.Button(panel_buttons,label="Minimize")
-        button_exit = frame.button_exit = \
-            wx.Button(panel_buttons, label="Exit program")
-        button_ok.SetDefault()
-        panel_buttons.Sizer.Add(button_ok)
+        sizer.Add(panel_buttons, border=5, flag=wx.GROW | wx.ALL)
+        frame.button_ok = wx.lib.agw.gradientbutton.GradientButton(
+            panel_buttons, label="Minimize", size=(100, -1))
+        frame.button_exit = wx.lib.agw.gradientbutton.GradientButton(
+            panel_buttons, label="Exit program", size=(100, -1))
+        for b in (frame.button_ok, frame.button_exit):
+            bold_font = wx.SystemSettings_GetFont(wx.SYS_DEFAULT_GUI_FONT)
+            bold_font.SetWeight(wx.BOLD)
+            b.SetFont(bold_font)
+            b.SetTopStartColour(wx.Colour(96, 96, 96))
+            b.SetTopEndColour(wx.Colour(112, 112, 112))
+            b.SetBottomStartColour(b.GetTopEndColour())
+            b.SetBottomEndColour(wx.Colour(160, 160, 160))
+            b.SetPressedTopColour(wx.Colour(160, 160, 160))
+            b.SetPressedBottomColour(wx.Colour(160, 160, 160))
+        frame.button_ok.SetDefault()
+        panel_buttons.Sizer.Add(frame.button_ok)
         panel_buttons.Sizer.AddStretchSpacer()
-        panel_buttons.Sizer.Add(button_exit, flag=wx.ALIGN_RIGHT)
-        text = wx.StaticText(panel, label=conf.InfoText, style=wx.ALIGN_CENTER)
-        text.ForegroundColour = wx.Colour(92, 92, 92)
-        sizer.AddStretchSpacer()
-        sizer.Add(text, border=3, flag=wx.ALL | wx.ALIGN_BOTTOM | wx.ALIGN_CENTER)
+        panel_buttons.Sizer.Add(frame.button_exit, flag=wx.ALIGN_RIGHT)
+
+        wx.CallLater(0, lambda: notebook.SetSelection(0)) # Fix display
 
         # Position window in lower right corner
         frame.Layout()
@@ -476,7 +805,6 @@ class NightFall(wx.App):
         icons = wx.IconBundle()
         icons.AddIcon(wx.IconFromBitmap(wx.Bitmap((conf.SettingsFrameIcon))))
         frame.SetIcons(icons)
-
         frame.ToggleWindowStyle(wx.STAY_ON_TOP)
         return frame
 
@@ -553,8 +881,8 @@ class TimeSelector(wx.PyPanel):
         if not width or not height:
             return
 
-        colour_off, colour_on = wx.Colour(0,0,0), wx.Colour(0,0,255)
-        colour_text = wx.Colour(255,255,255)
+        colour_off, colour_on = wx.Colour(0, 0 ,0), wx.Colour(0, 0, 255)
+        colour_text = wx.Colour(255, 255, 255)
         dc.SetBackground(wx.Brush(colour_off, wx.SOLID))
         dc.Clear()
 
@@ -739,13 +1067,166 @@ class StartupService(object):
                 # pythonw leaves no DOS window open
                 python = sys.executable.replace("python.exe", "pythonw.exe")
                 shortcut.Targetpath = "\"%s\"" % python
-                shortcut.Arguments = "\"%s\"" % target
+                shortcut.Arguments = "\"%s\" %s" % \
+                                     (target, conf.StartMinimizedParameter)
             else:
                 shortcut.Targetpath = target
+                shortcut.Arguments = conf.StartMinimizedParameter
             shortcut.WorkingDirectory = workdir
             if icon:
                 shortcut.IconLocation = icon
             shortcut.save()
+
+
+def get_factor_bitmap(factor, supported=True):
+    """
+    Returns a wx.Bitmap for the specified factor, with colour and brightness
+    information as both text and visual.
+    
+    @param   supported  whether the factor is supported by hardware
+    """
+    bmp = wx.Bitmap(conf.ListIcon)
+    dc = wx.MemoryDC(bmp)
+    brightness_ratio = (factor[0] - 128) / 255.
+    rgb = [min(255, int(i + i * brightness_ratio)) for i in factor[1:]]
+    colour = wx.Colour(*rgb)
+    colour_text = wx.WHITE if sum(rgb) < 255 * 2.3 else wx.Colour(64, 64, 64)
+    dc.SetBrush(wx.Brush(colour, wx.SOLID))
+    dc.SetPen(wx.Pen(colour if supported else wx.RED))
+    dc.DrawRectangle(*((8, 4, 32, 20) if supported else (7, 3, 34, 22)))
+    dc.SetTextForeground(colour_text)
+    dc.SetPen(wx.Pen(colour_text))
+    font = wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
+                   wx.FONTWEIGHT_BOLD, face="Tahoma")
+    dc.SetFont(font)
+    text = "%d%%" % math.ceil(100 * (factor[0] + 1) / conf.NormalBrightness)
+    width = dc.GetTextExtent(text)[0]
+    dc.DrawText(text, 8 + (34 - width) / 2, 8)
+    colour_text = wx.Colour(125, 125, 125) if supported else wx.RED
+    dc.SetTextForeground(colour_text)
+    dc.SetPen(wx.Pen(colour_text))
+    font = wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
+                   wx.FONTWEIGHT_BOLD, face="Arial")
+    dc.SetFont(font)
+    rgb = "#%2X%2X%2X" % (factor[1], factor[2], factor[3])
+    dc.DrawText(rgb, 2, 36)
+    
+    del dc
+    return bmp
+
+
+def get_factor_str(factor, supported=True):
+    """Returns a readable string representation of the factor."""
+    result = "%d%% brightness.\n%s" % (factor[0] / 128. * 100,
+             ", ".join("%s at %d%%" % (s, factor[i + 1] / 255. * 100)
+                      for i, s in enumerate(("Red", "green", "blue"))))
+    if not supported:
+        result += "\n\nNot supported by hardware."
+    return result
+
+
+
+class BitmapListHandler(object):
+    """
+    Image loader for wx.lib.agw.thumbnailctrl.ThumbnailCtrl using
+    pre-loaded bitmaps.
+    """
+    _bitmaps = {} # {filename: wx.Bitmap, }
+    _factors = {} # {filename: [factor], }
+
+
+    @classmethod
+    def RegisterBitmap(cls, filename, bitmap, factor):
+        cls._bitmaps[filename] = bitmap
+        cls._factors[filename] = factor
+
+
+    @classmethod
+    def UnregisterBitmap(cls, filename):
+        if filename in cls._bitmaps:
+            del cls._bitmaps[filename]
+        if filename in cls._factors:
+            del cls._factors[filename]
+
+
+    @classmethod
+    def GetFactor(cls, filename):
+        return cls._factors[filename]
+
+
+    def LoadThumbnail(self, filename, thumbnailsize):
+        """
+        Load the image.
+
+        @param  filename  
+        :param `thumbnailsize`: the desired size of the thumbnail.
+        """
+        img = wx.ImageFromBitmap(self._bitmaps[os.path.basename(filename)])
+
+        originalsize = (img.GetWidth(), img.GetHeight())
+        alpha = img.HasAlpha()
+        
+        return img, originalsize, alpha
+
+
+
+class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
+    """A ThumbnailCtrl that can simply show bitmaps, with files not on disk."""
+
+    def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition,
+                 size=wx.DefaultSize,
+                 thumboutline=wx.lib.agw.thumbnailctrl.THUMB_OUTLINE_FULL,
+                 thumbfilter=wx.lib.agw.thumbnailctrl.THUMB_FILTER_IMAGES,
+                 imagehandler=BitmapListHandler):
+        wx.lib.agw.thumbnailctrl.ThumbnailCtrl.__init__(self, parent, id, pos,
+            size, thumboutline, thumbfilter, imagehandler
+        )
+        self.SetDropShadow(False)
+        self.EnableToolTips(True)
+        self.ShowFileNames(False)
+        self.SetThumbSize(68, 47, 6)
+        # Hack to get around ThumbnailCtrl's internal monkey-patching
+        setattr(self._scrolled, "GetThumbInfo", getattr(self, "_GetThumbInfo"))
+        # To disable ThumbnailCtrl's rotation/deletion/etc
+        self._scrolled.Bind(wx.EVT_CHAR, None)
+        # To disable ThumbnailCtrl's zooming
+        self._scrolled.Bind(wx.EVT_MOUSEWHEEL, None)
+        self._scrolled.Bind(
+            wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
+            self.OnSelectionChanged)
+
+
+    def OnSelectionChanged(self, event):
+        # Disable ThumbnailCtrl's multiple selection
+        self._scrolled._selectedarray[:] = [self.GetSelection()]
+        event.Skip()
+
+
+    def RegisterBitmap(self, filename, bitmap, factor):
+        BitmapListHandler.RegisterBitmap(filename, bitmap, factor)
+
+
+    def UnregisterBitmap(self, filename):
+        BitmapListHandler.UnregisterBitmap(filename)
+
+
+    def GetThumbFactor(self, index):
+        """Returns the factor for the specified index."""
+        result = None
+        thumb_ctrl = self.GetItem(index)
+        if thumb_ctrl:
+            result = BitmapListHandler.GetFactor(thumb_ctrl.GetFileName())
+        return result
+
+
+    def _GetThumbInfo(self, index=-1):
+        """Returns the thumbnail information for the specified index."""
+        thumbinfo = None
+        
+        if index >= 0:
+            thumbinfo = get_factor_str(self.GetThumbFactor(index))
+
+        return thumbinfo
 
 
 

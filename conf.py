@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    31.10.2012
+@modified    23.01.2013
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,16 +17,17 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "0.1.2a"
+Version = "1.0"
 
-VersionDate = "31.10.2012"
+VersionDate = "23.01.2013"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
     ApplicationDirectory = os.path.dirname(sys.executable) # likely relative
     ApplicationPath = os.path.abspath(sys.executable)
     ShortcutIconPath = ApplicationPath
-    ResourceDirectory = os.path.join(os.environ.get("_MEIPASS2", sys._MEIPASS), "res")
+    ResourceDirectory = os.path.join(os.environ.get("_MEIPASS2", sys._MEIPASS),
+                                     "res")
 else:
     ApplicationDirectory = os.path.dirname(__file__) # likely relative
     FullDirectory = os.path.dirname(os.path.abspath(__file__))
@@ -36,23 +37,49 @@ else:
 
 """List of attribute names that can be saved to and loaded from ConfigFile."""
 FileDirectives = [
-    "DimmingEnabled", "ScheduleEnabled", "DimmingFactor", "Schedule"
+    "DimmingEnabled", "ScheduleEnabled", "DimmingFactor", "Schedule",
+    "StoredFactors"
 ]
 
 """Name of file where FileDirectives are kept."""
 ConfigFile = "%s.ini" % os.path.join(ApplicationDirectory, Title.lower())
 
 """Settings window size in pixels, (w, h)."""
-SettingsFrameSize = (-1, 260)
+SettingsFrameSize = (415, 340)
 
 """Tooltip shown for the tray icon."""
 TrayTooltip = "NightFall (click to toggle options, right-click for menu)"
+
+"""URL to program homepage."""
+HomeUrl = "http://github.com/suurjaak/NightFall"
+
+"""Saved factor list icon."""
+ListIcon = os.path.join(ResourceDirectory, "listicon.png")
 
 """Window icon."""
 SettingsFrameIcon = os.path.join(ResourceDirectory, "icon.png")
 
 """Number of milliseconds before settings window is hidden on losing focus."""
-SettingsFrameTimeout = 10000
+SettingsFrameTimeout = 30000
+
+"""Whether sliding the settings frame in/out of view is enabled."""
+SettingsFrameSlideInEnabled = True
+SettingsFrameSlideOutEnabled = False
+"""Pixel step for settings frame movement during slidein/slideout."""
+SettingsFrameSlideInStep = 6
+SettingsFrameSlideOutStep = 5
+
+"""Milliseconds between steps during slidein/slideout."""
+SettingsFrameSlideDelay = 10
+
+"""Milliseconds between steps during factor fadein/fadeout."""
+FadeDelay = 50
+
+"""Number of steps to take during factor fadein/fadeout."""
+FadeSteps = 20
+
+"""Command-line parameter for running the program with settings minimized."""
+StartMinimizedParameter = "--start-minimized"
 
 """Tray icon when dimming is enabled."""
 TrayIconOn = os.path.join(ResourceDirectory, "tray_on.png")
@@ -76,7 +103,7 @@ TrayIcons = \
 Valid range for gamma coefficients, as (min, max). Lower coefficients cause the
 system calls to fail for some reason.
 """
-ValidGammaRange = (0.23, 1.)
+ValidColourRange = (59, 255)
 
 """Whether dimming is currently enabled."""
 DimmingEnabled = False
@@ -87,21 +114,29 @@ ScheduleEnabled = False
 """Whether NightFall runs at computer startup."""
 StartupEnabled = False
 
-"""Gamma coefficients for RGB channels, ranging 0..1."""
-DimmingFactor = [0.94, 0.52, 0.45]
+"""
+Screen dimming factor, as a list of 4 integers, standing for brightness and 3
+RGB channels, ranging from 0..255 (brightness at 128 is 100%, lower is darker).
+"""
+DimmingFactor = [128, 255, 128, 128]
 
 """Default gamma coefficients for dimmed display."""
-DefaultDimmingFactor = [0.94, 0.52, 0.45]
+DefaultDimmingFactor = [128, 255, 128, 128]
 
 """Gamma coefficients for normal display."""
-NormalDimmingFactor = [1, 1, 1]
+NormalDimmingFactor = [128, 255, 255, 255]
+
+"""Screen brightness for normal display."""
+NormalBrightness = 128
 
 """Pre-stored dimming factors."""
 StoredFactors = [
-    [0.92, 0.66, 0.55], [0.98, 0.56, 0.40], [0.84, 0.42, 0.26],
-    [0.63, 0.38, 0.30],
-    [0.27, 0.42, 0.63], [0.41, 0.56, 0.84], [0.67, 0.78, 0.92]
+    [57, 255, 179, 179], [57, 255, 211, 176], [128, 255, 128, 128],
+    [128, 128, 128, 255], [88, 168, 168, 255], [0, 255, 255, 255],
+    [26, 255, 212, 212], [127, 255, 255, 128], [77, 255, 255, 159],
+    [77, 159, 255, 159], [83, 159, 236, 159]
 ]
+
 
 """The dimming schedule, [1,0,..] per each minute."""
 Schedule = []
@@ -112,10 +147,22 @@ The default dimming schedule, [1,0,..] per each quarter hour
 """
 DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
 
-"""Information text shown on settings page."""
-InfoText = ("%(name)s can dim screen colors for a more natural feeling" + 
-    " during late hours.") % {"name": Title}
+"""Information text shown on configuration page."""
+InfoText = "%(name)s can dim screen colors for a more natural feeling" \
+    " during late hours.\nDimming can be scheduled in detail, or activated " \
+    "manually at any time." % {"name": Title}
 
+"""Information text shown on expert settings page."""
+InfoDetailedText = "Fine-tune the individual factors that make up the " \
+                   "display: brightness \n(ranges from dark to superbright) " \
+                   "and red-green-blue colour channels.\n\n" \
+                   "A lot of the darker ranges will not be accepted by" \
+                   " the graphics hardware."
+
+
+
+"""Error text shown if applying a factor failed."""
+FactorFailedText = "Selected combo is invalid"
 
 def load():
     """Loads FileDirectives from ConfigFile into this module's attributes."""
