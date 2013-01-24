@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    23.01.2013
+@modified    24.01.2013
 """
 import datetime
 import math
@@ -390,6 +390,16 @@ class NightFall(wx.App):
             self.dimmer.set_factor(factor, "APPLY SAVED")
 
 
+    def on_menu_stored_factor(self, event):
+        """Handler to apply a stored factor from clicking in tray menu."""
+        factor = self.trayiconmenu._item_factors[event.GetId()]
+        if not self.dimmer.should_dim():
+            conf.DimmingEnabled = True
+            self.frame.cb_enabled.Value = True
+            self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
+        self.dimmer.set_factor(factor, "APPLY SAVED")
+
+
     def on_save_factor(self, event):
         """Stores the currently set rgb-brightness values."""
         factor = conf.DimmingFactor
@@ -433,21 +443,33 @@ class NightFall(wx.App):
     def on_open_tray_menu(self, event):
         """Creates and opens a popup menu for the tray icon."""
         menu = wx.Menu()
+        menu._item_factors = {} # {MenuItem.Id: factor, }
+        is_dimming = self.dimmer.should_dim()
         text = "Turn " + ("current dimming off" if self.dimmer.should_dim()
                           else "dimming on")
         item = menu.AppendCheckItem(id=-1, text=text)
-        item.Check(self.dimmer.should_dim())
+        item.Check(is_dimming)
         menu.Bind(wx.EVT_MENU, self.on_toggle_dimming_tray, id=item.GetId())
         item = menu.AppendCheckItem(id=-1, text="Dim during scheduled hours")
         item.Check(conf.ScheduleEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
         menu.AppendSeparator()
+        menu_factor = wx.Menu()
+        for i in range(self.frame.list_factors.GetItemCount()):
+            factor = self.frame.list_factors.GetThumbFactor(i)
+            item = menu_factor.AppendCheckItem(id=-1,
+                text=get_factor_str(factor, short=True))
+            item.Check(is_dimming and factor == conf.DimmingFactor)
+            menu.Bind(wx.EVT_MENU, self.on_menu_stored_factor, id=item.GetId())
+            menu._item_factors[item.GetId()] = factor # For event handling
+        menu.AppendMenu(id=-1, text="Apply saved factor", submenu=menu_factor)
         item = wx.MenuItem(menu, -1, "Options")
         menu.Bind(wx.EVT_MENU, self.on_toggle_settings, id=item.GetId())
         menu.AppendItem(item)
         item = wx.MenuItem(menu, -1, "Exit NightFall")
         menu.Bind(wx.EVT_MENU, self.on_exit, id=item.GetId())
         menu.AppendItem(item)
+        self.trayiconmenu = menu
         self.trayicon.PopupMenu(menu)
 
 
@@ -1115,13 +1137,17 @@ def get_factor_bitmap(factor, supported=True):
     return bmp
 
 
-def get_factor_str(factor, supported=True):
+def get_factor_str(factor, supported=True, short=False):
     """Returns a readable string representation of the factor."""
-    result = "%d%% brightness.\n%s" % (factor[0] / 128. * 100,
-             ", ".join("%s at %d%%" % (s, factor[i + 1] / 255. * 100)
-                      for i, s in enumerate(("Red", "green", "blue"))))
-    if not supported:
-        result += "\n\nNot supported by hardware."
+    if short:
+        result = "%d%% brightness, #%2X%2X%2X" % (factor[0] / 128. * 100,
+                 factor[1], factor[2], factor[3])
+    else:
+        result = "%d%% brightness.\n%s" % (factor[0] / 128. * 100,
+                 ", ".join("%s at %d%%" % (s, factor[i + 1] / 255. * 100)
+                          for i, s in enumerate(("Red", "green", "blue"))))
+        if not supported:
+            result += "\n\nNot supported by hardware."
     return result
 
 

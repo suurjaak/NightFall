@@ -17,20 +17,17 @@ scheduled in settings.
 Dependencies
 ------------
 
-If running as a Python script, NightFall requires Python 2.6+
-and uses these 3rd-party Python packages:
-
-* wxPython 2.8+ (http://wxpython.org/)
-* numpy (http://numpy.scipy.org/)
+If running as a Python script, NightFall requires Python 2.6+ and wx.Python
+2.8+ (http://wxpython.org/)
 
 
 Attribution
 -----------
 
-NightFall includes bits of code in gamma.py from the psychopy.gamma module,
-from PsychoPy 1.75 (http://www.psychopy.org/epydoc/psychopy.gamma-pysrc.html),
-released under the compatible GNU General Public License v3;
-and from Windows Routines 2.2.1 by Jason R. Coombs,
+NightFall includes bits of code in gamma.py from PsychoPy 1.75
+(http://www.psychopy.org/epydoc/psychopy.gamma-pysrc.html), released under the
+compatible GNU General Public License v3; and from Windows Routines 2.2.1 by
+Jason R. Coombs,
 (http://pydoc.net/jaraco.windows/2.2.1/jaraco.windows.error), released under
 the MIT License.
 
