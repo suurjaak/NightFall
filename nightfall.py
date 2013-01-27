@@ -139,12 +139,12 @@ class Dimmer(object):
             self.post_event("SCHEDULE TOGGLED", conf.ScheduleEnabled)
             conf.save()
             if self.should_dim():
-                self.apply_factor(conf.DimmingFactor)
+                self.apply_factor(conf.DimmingFactor, fade=True)
                 msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() \
                       else "DIMMING ON"
                 self.post_event(msg, conf.DimmingFactor)
             else:
-                self.apply_factor(conf.NormalDimmingFactor)
+                self.apply_factor(conf.NormalDimmingFactor, fade=True)
                 self.post_event("DIMMING OFF", conf.NormalDimmingFactor)
 
 

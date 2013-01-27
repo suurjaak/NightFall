@@ -32,7 +32,7 @@ compatible GNU General Public License v3; and from Windows Routines 2.2.1 by
 Jason R. Coombs,
 (http://pydoc.net/jaraco.windows/2.2.1/jaraco.windows.error), released under
 the MIT License.
-Windows binaries built with PyInstaller 2.0 (http://www.pyinstaller.org/)
+Windows binaries built with PyInstaller 2.0 (http://www.pyinstaller.org/).
 
 
 License
