@@ -118,10 +118,10 @@ StartupEnabled = False
 Screen dimming factor, as a list of 4 integers, standing for brightness and 3
 RGB channels, ranging from 0..255 (brightness at 128 is 100%, lower is darker).
 """
-DimmingFactor = [128, 255, 128, 128]
+DimmingFactor = [82, 255, 189, 189]
 
 """Default gamma coefficients for dimmed display."""
-DefaultDimmingFactor = [128, 255, 128, 128]
+DefaultDimmingFactor = [82, 255, 189, 189]
 
 """Gamma coefficients for normal display."""
 NormalDimmingFactor = [128, 255, 255, 255]
