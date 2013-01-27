@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    24.01.2013
+@modified    27.01.2013
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "1.01"
+Version = "1.1"
 
-VersionDate = "24.01.2013"
+VersionDate = "27.01.2013"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -73,7 +73,7 @@ SettingsFrameSlideOutStep = 5
 SettingsFrameSlideDelay = 10
 
 """Milliseconds between steps during factor fadein/fadeout."""
-FadeDelay = 50
+FadeDelay = 30
 
 """Number of steps to take during factor fadein/fadeout."""
 FadeSteps = 20

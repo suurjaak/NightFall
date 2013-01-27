@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    24.01.2013
+@modified    27.01.2013
 """
 import datetime
 import math
@@ -41,6 +41,8 @@ class Dimmer(object):
         self.fade_delta = None # Delta to add to factor elements on fade step
         self.fade_target_factor = None # Final factor values during fade
         self.fade_current_factor = None # Factor float values during fade
+        self.fade_original_factor = None # Original factor before applying fade
+        self.fade_info = None # info given for applying/setting factor
         self.service = StartupService()
         self.check_conf()
         self.timer = wx.Timer()
@@ -76,7 +78,7 @@ class Dimmer(object):
         self.post_event("STARTUP POSSIBLE", self.service.can_start())
         if self.should_dim():
             self.apply_factor(conf.DimmingFactor, fade=True)
-            msg = "SCHEDULE IN EFFECT" if self.should_schedule() \
+            msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() \
                   else "DIMMING ON"
             self.post_event(msg, conf.DimmingFactor)
         else:
@@ -102,7 +104,7 @@ class Dimmer(object):
         """
         if conf.ScheduleEnabled and not conf.DimmingEnabled:
             factor, msg = conf.NormalDimmingFactor, "DIMMING OFF"
-            if self.should_schedule():
+            if self.should_dim_scheduled():
                 factor, msg = conf.DimmingFactor, "SCHEDULE IN EFFECT"
             if factor != self.current_factor:
                 self.apply_factor(factor, fade=True)
@@ -116,14 +118,17 @@ class Dimmer(object):
         @param   factor       a 4-byte list, for 3 RGB channels and brightness,
                               0..255
         @param   info         info given to callback event, if any
+        @return               False on failure, True otherwise
         """
+        result = True
         changed = (factor != self.current_factor)
         if changed:
             conf.DimmingFactor = factor[:]
-            self.post_event("FACTOR CHANGED", conf.DimmingFactor, info)
+            self.post_event("FACTOR CHANGED", factor, info)
             conf.save()
             if self.should_dim():
-                self.apply_factor(factor, info)
+                result = self.apply_factor(factor, info)
+        return result
 
 
     def toggle_schedule(self, enabled):
@@ -135,7 +140,7 @@ class Dimmer(object):
             conf.save()
             if self.should_dim():
                 self.apply_factor(conf.DimmingFactor)
-                msg = "SCHEDULE IN EFFECT" if self.should_schedule() \
+                msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() \
                       else "DIMMING ON"
                 self.post_event(msg, conf.DimmingFactor)
             else:
@@ -165,7 +170,7 @@ class Dimmer(object):
             conf.save()
             if self.should_dim():
                 self.apply_factor(conf.DimmingFactor)
-                msg = "SCHEDULE IN EFFECT" if self.should_schedule() \
+                msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() \
                       else "DIMMING ON"
                 self.post_event(msg, conf.DimmingFactor)
             else:
@@ -178,10 +183,10 @@ class Dimmer(object):
         Returns whether dimming should currently be applied, based on global
         enabled flag and enabled time selection.
         """
-        return conf.DimmingEnabled or self.should_schedule()
+        return conf.DimmingEnabled or self.should_dim_scheduled()
 
 
-    def should_schedule(self):
+    def should_dim_scheduled(self):
         """Whether dimming should currently be on, according to schedule."""
         result = False
         if conf.ScheduleEnabled:
@@ -199,28 +204,33 @@ class Dimmer(object):
         @param   info         info given to callback event, if any
         @param   fade         if True, changes factor from current to new in a
                               number of steps smoothly
+        @return               False on failure, True otherwise
         """
+        result = True
         if self.fade_timer:
             self.fade_timer.Stop()
+            self.fade_target_factor = self.fade_info = None
             self.fade_delta = self.fade_steps = self.fade_timer = None
-            self.fade_target_factor = None
+            self.fade_current_factor = self.fade_original_factor = None
         if fade or (info and "APPLY DETAILED" != info):
+            self.fade_info = info
             self.fade_steps = conf.FadeSteps
             self.fade_target_factor = factor[:]
             self.fade_current_factor = map(float, self.current_factor)
+            self.fade_original_factor = self.current_factor[:]
             self.fade_delta = []
             for i, (new, now) in enumerate(zip(factor, self.current_factor)):
                 self.fade_delta.append(float(new - now) / conf.FadeSteps)
-            self.fade_timer = wx.CallLater(conf.FadeDelay, self.fade_step)
+            self.fade_timer = wx.CallLater(conf.FadeDelay, self.on_fade_step)
         elif gamma.set_screen_factor(factor):
             self.current_factor = factor[:]
-            self.post_event("FACTOR SUCCEEDED", conf.DimmingFactor, info)
         else:
-            self.post_event("FACTOR FAILED", conf.DimmingFactor, info)
+            self.post_event("FACTOR FAILED", factor, info)
+            result = False
+        return result
 
 
-
-    def fade_step(self):
+    def on_fade_step(self):
         """
         Handler for a fade step, applies the fade delta to screen factor and
         schedules another event, if more steps left.
@@ -229,16 +239,27 @@ class Dimmer(object):
         if self.fade_steps:
             self.fade_current_factor = [(current + delta) for current, delta
                 in zip(self.fade_current_factor, self.fade_delta)]
-            if 1 == self.fade_steps:
-                # Final step: use exact given target, to avoid rounding errors
-                self.set_factor(self.fade_target_factor)
-            self.set_factor(map(int, map(round, self.fade_current_factor)))
             self.fade_steps -= 1
-            if self.fade_steps:
-                self.fade_timer = wx.CallLater(conf.FadeDelay, self.fade_step)
+            if not self.fade_steps:
+                # Final step: use exact given target, to avoid rounding errors
+                current_factor = self.fade_target_factor
             else:
-                self.fade_delta = self.fade_steps = None
+                current_factor = map(int, map(round, self.fade_current_factor))
+            success = self.apply_factor(current_factor)
+            if success and self.should_dim() \
+            and self.fade_original_factor != conf.NormalDimmingFactor:
+                # Send incremental change if fading from one factor to another.
+                self.post_event("FACTOR CHANGED", current_factor, self.fade_info)
+            elif not success:
+                if not self.fade_steps:
+                    # Unsupported factor: jump back to normal on last step.
+                    self.apply_factor(conf.NormalDimmingFactor, fade=False)
+            if self.fade_steps:
+                self.fade_timer = wx.CallLater(conf.FadeDelay, self.on_fade_step)
+            else:
                 self.fade_target_factor = None
+                self.fade_delta = self.fade_steps = self.fade_info = None
+                self.fade_current_factor = self.fade_original_factor = None
 
 
 
@@ -249,11 +270,11 @@ class Dimmer(object):
         msg = "DIMMING TOGGLED"
         if self.should_dim():
             factor = conf.DimmingFactor
-            if self.should_schedule():
+            if self.should_dim_scheduled():
                 msg = "SCHEDULE IN EFFECT"
         else:
             factor = conf.NormalDimmingFactor
-        self.apply_factor(factor)
+        self.apply_factor(factor, fade=True)
         if changed:
             conf.save()
         self.post_event(msg, conf.DimmingEnabled)
@@ -273,8 +294,10 @@ class NightFall(wx.App):
         self.frame_shower = None # wx.CallLater object for timed showing on slideout
         self.frame_pos_orig = None # Position of frame before slidein
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
-        frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED, self.on_change_stored_factor, frame.list_factors._scrolled)
-        frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_DCLICK, self.on_stored_factor, frame.list_factors._scrolled)
+        frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
+            self.on_change_stored_factor, frame.list_factors._scrolled)
+        frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_DCLICK,
+            self.on_stored_factor, frame.list_factors._scrolled)
 
         frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_dimming, frame.cb_enabled)
         frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_startup, frame.cb_startup)
@@ -313,24 +336,22 @@ class NightFall(wx.App):
         if "FACTOR CHANGED" == topic:
             for i, g in enumerate(data):
                 self.frame.sliders_factor[i].SetValue(g)
-            if "APPLY DETAILED" == info and not self.dimmer.should_dim():
-                # If dimming is off, success/failure events will not follow
-                self.frame.bmp_detail.SetBitmap(get_factor_bitmap(data))
-                self.frame.bmp_detail.SetToolTipString(get_factor_str(data))
-        elif "FACTOR SUCCEEDED" == topic:
-            pass
             bmp, tooltip = get_factor_bitmap(data), get_factor_str(data)
-            self.frame.bmp_config.SetBitmap(bmp)
-            self.frame.bmp_detail.SetBitmap(bmp)
-            self.frame.bmp_config.SetToolTipString(tooltip)
-            self.frame.bmp_detail.SetToolTipString(tooltip)
+            for b in [self.frame.bmp_config, self.frame.bmp_detail]:
+                b.SetBitmap(bmp)
+                b.SetToolTipString(tooltip)
+            self.frame.label_factor.Label = "Currently selected screen factor:"
+            self.frame.label_factor.ForegroundColour = wx.BLACK
         elif "FACTOR FAILED" == topic:
             bmp = get_factor_bitmap(data, False)
             tooltip = get_factor_str(data, False)
-            self.frame.bmp_config.SetBitmap(bmp)
-            self.frame.bmp_detail.SetBitmap(bmp)
-            self.frame.bmp_config.SetToolTipString(tooltip)
-            self.frame.bmp_detail.SetToolTipString(tooltip)
+            for b in [self.frame.bmp_config, self.frame.bmp_detail]:
+                b.SetBitmap(bmp)
+                b.SetToolTipString(tooltip)
+            self.frame.label_factor.Label = "Currently selected screen " \
+                                            "factor is unsupported:"
+            self.frame.label_factor.ForegroundColour = wx.RED
+            self.frame.label_factor.ContainingSizer.Layout()
             if "APPLY SAVED" == info:
                 for i, factor in enumerate(conf.StoredFactors):
                     if factor == data:
@@ -528,21 +549,16 @@ class NightFall(wx.App):
         """
         h = self.frame.Size.height
         display_h = wx.GetClientDisplayRect().height
-        #print "settings_slideout, pos=%s, h=%s, display_h=%s" % (self.frame.Position, h, display_h)
         if not self.frame_pos_orig:
             self.frame_pos_orig = self.frame.Position.x, display_h - h
             self.frame.Position = self.frame_pos_orig[0], display_h
-            #print "setting frame_pos_orig to %s and frame pos to %s" % (self.frame_pos_orig, self.frame.Position)
         y = self.frame.Position.y
         if not self.frame.Shown:
             self.frame.Show()
         if (y + h > display_h):
-            #print "sliding out, as %s + %s > %s" % (y, h, display_h)
-            #print "moving frame out to %s" % self.frame.Position
             self.frame.Position = (self.frame.Position.x, y - conf.SettingsFrameSlideOutStep)
             self.frame_shower = wx.CallLater(conf.SettingsFrameSlideDelay, self.settings_slideout)
         else:
-            #print "disabling frame_shower, as we're there (%s)" % self.frame.Position
             self.frame_shower = None
             self.frame_pos_orig = None
             self.frame.Raise()
@@ -616,7 +632,7 @@ class NightFall(wx.App):
         Handler for toggling dimming on/off from the tray, can affect either
         schedule or global flag.
         """
-        if not event.IsChecked() and self.dimmer.should_schedule():
+        if not event.IsChecked() and self.dimmer.should_dim_scheduled():
             self.dimmer.toggle_schedule(False)
         self.dimmer.toggle_dimming(event.IsChecked())
 
@@ -676,8 +692,9 @@ class NightFall(wx.App):
         panel_factor = wx.Panel(panel_config)
         panel_factor.Sizer = wx.BoxSizer(wx.HORIZONTAL)
         panel_factor.Sizer.AddStretchSpacer()
-        panel_factor.Sizer.Add(wx.StaticText(panel_factor,
-            label="Currently selected screen factor:"), border=5,
+        frame.label_factor = wx.StaticText(panel_factor,
+            label="Currently selected screen factor:")
+        panel_factor.Sizer.Add(frame.label_factor, border=5,
             flag=wx.ALL | wx.ALIGN_RIGHT)
         frame.bmp_config = wx.StaticBitmap(panel_factor,
             bitmap=get_factor_bitmap(conf.DimmingFactor))

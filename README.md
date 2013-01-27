@@ -4,6 +4,8 @@ NightFall
 A small tray program for making screen colours darker and softer during
 late hours. Currently works under Windows, *might* work under Linux/OSX.
 
+Windows binaries at http://suurjaak.github.com/NightFall.
+
 
 Using The Program
 -----------------
@@ -30,6 +32,7 @@ compatible GNU General Public License v3; and from Windows Routines 2.2.1 by
 Jason R. Coombs,
 (http://pydoc.net/jaraco.windows/2.2.1/jaraco.windows.error), released under
 the MIT License.
+Windows binaries built with PyInstaller 2.0 (http://www.pyinstaller.org/)
 
 
 License

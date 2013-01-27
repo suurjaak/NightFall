@@ -2,44 +2,25 @@
 """
 Functionality for handling screen device gamma ramps.
 
-Accessing gamma ramp functionality partly from PsychoPy, (c) Jonathan Peirce,
-formatting Windows errors from Windows Routines by Jason R. Coombs, both
+Accessing gamma ramp functionality partly from PsychoPy by Jonathan Peirce,
+formatting Windows errors from Windows Routines, by Jason R. Coombs, both
 released under compatible open source licences.
-
-@from SetDeviceGammaRamp function Windows documentation:
-    The gamma ramp is specified in three arrays of 256 WORD elements each,
-    which contain the mapping between RGB values in the frame buffer and
-    digital-analog-converter values. The sequence of the arrays is red,
-    green, blue. The RGB values must be stored in the most significant bits
-    of each WORD to increase DAC independence.
-    Any entry in the ramp must be within 32768 of the identity value.
-
-@from http://tech.groups.yahoo.com/group/psychtoolbox/message/6984,
-"Re: Gamma Table constraints (Windows)" by Brian J. Stankiewicz:
-    There are two "regions" that have illegal LUT (lookup table) values.
-    The LUT Entries below 128 can be characterized by:
-      IllegalRegion > 0.505+LUTEntry*0.39
-    and those above can be characterized by:
-      IllegalRegion < -0.5093+LUTEntry*0.39
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    24.01.2013
+@modified    27.01.2013
 """
 import ctypes
 import ctypes.util
-import ctypes.wintypes
 import sys
-import wx
-
 
 # import platform specific C++ libs for controlling gamma
-if "win32" == sys.platform:
-    from ctypes import windll
+if "win32" == sys.platform: # Using the following DLLs: gdi32, kernel32, user32
+    import ctypes.wintypes
 elif "darwin" == sys.platform:
     carbon = ctypes.CDLL("/System/Library/Carbon.framework/Carbon")
 elif sys.platform.startswith("linux"):
-    xf86vm=ctypes.CDLL(ctypes.util.find_library("Xxf86vm"))
+    xf86vm = ctypes.CDLL(ctypes.util.find_library("Xxf86vm"))
     xlib = ctypes.CDLL(ctypes.util.find_library("X11"))
 
 
@@ -53,6 +34,23 @@ def set_screen_factor(factor):
     @return               True on success, False on failure
     """
     ramp = [[], [], []]
+    """
+    @from SetDeviceGammaRamp function Windows documentation:
+        The gamma ramp is specified in three arrays of 256 WORD elements each,
+        which contain the mapping between RGB values in the frame buffer and
+        digital-analog-converter values. The sequence of the arrays is red,
+        green, blue. The RGB values must be stored in the most significant bits
+        of each WORD to increase DAC independence.
+        Any entry in the ramp must be within 32768 of the identity value.
+
+    @from http://tech.groups.yahoo.com/group/psychtoolbox/message/6984,
+    "Re: Gamma Table constraints (Windows)" by Brian J. Stankiewicz:
+        There are two "regions" that have illegal LUT (lookup table) values.
+        The LUT Entries below 128 can be characterized by:
+          IllegalRegion > 0.505+LUTEntry*0.39
+        and those above can be characterized by:
+          IllegalRegion < -0.5093+LUTEntry*0.39
+    """
     for i in range(256):
         val = min(i * (factor[0] + 128), 65535)
         [ramp[j].append(int(val * factor[j + 1] / 255.)) for j in range(3)]
@@ -67,10 +65,10 @@ def set_screen_factor(factor):
 
 
 def get_screen_device():
-    """Initializes and returns the platform-specific screen device instance."""
+    """Returns the platform-specific screen device identifier."""
     if not hasattr(get_screen_device, "device"):
-        if "win32" ==  sys.platform:
-            get_screen_device.device = wx.ScreenDC()
+        if "win32" == sys.platform:
+            get_screen_device.device = ctypes.windll.user32.GetDC(0)
         elif "darwin" == sys.platform:
             count = ctypes.c_uint32()
             carbon.CGGetActiveDisplayList(0, None, byref(count))
@@ -85,7 +83,8 @@ def get_screen_device():
             XOpenDisplay.restype = ctypes.POINTER(Display)
             XOpenDisplay.argtypes = [ctypes.c_char_p]
             get_screen_device.device = XOpenDisplay("")
-    return get_screen_device.device
+    device = get_screen_device.device
+    return device
 
 
 def set_gamma_ramp(ramp):
@@ -104,22 +103,23 @@ def set_gamma_ramp(ramp):
             ramp_c[i][j] = value
 
     if "win32" == sys.platform:
-        success = windll.gdi32.SetDeviceGammaRamp(device.GetHDC(), ramp_c)
+        success = ctypes.windll.gdi32.SetDeviceGammaRamp(device, ramp_c)
         if not success:
-            errorcode = windll.kernel32.GetLastError()
-            errormsg = format_system_message(errorcode).strip()
-            raise Exception, "SetDeviceGammaRamp failed: %s [error %s]" \
-                             % (errormsg, errorcode)
+            code = ctypes.windll.kernel32.GetLastError()
+            errormsg = format_windows_system_message(code).strip()
+            msg = "SetDeviceGammaRamp failed: %s [error %s]" % (errormsg, code)
+            raise Exception, msg
     elif "darwin" == sys.platform:
         error = carbon.CGSetDisplayTransferByTable(device, len(ramp_c[0]),
                    ramp_c[0], ramp_c[1], ramp_c[2])
         if error:
-            raise AssertionError, "CGSetDisplayTransferByTable failed"
+            msg = "CGSetDisplayTransferByTable failed [error %s]" % error
+            raise Exception, msg
     elif sys.platform.startswith("linux"):
         success = xf86vm.XF86VidModeSetGammaRamp(device, 0, len(ramp_c[0]),
                     ramp_c[0], ramp_c[1], ramp_c[2])
         if not success:
-            raise AssertionError, "XF86VidModeSetGammaRamp failed"
+            raise Exception, "XF86VidModeSetGammaRamp failed"
 
 
 def get_gamma_ramp():
@@ -136,25 +136,29 @@ def get_gamma_ramp():
     ramp_c = ((type_c * 256) * 3)()
 
     if "win32" == sys.platform:
-        success = windll.gdi32.GetDeviceGammaRamp(device.GetHDC(), ramp_c)
+        success = ctypes.windll.gdi32.GetDeviceGammaRamp(device, ramp_c)
         if not success:
-            raise AssertionError, "SetDeviceGammaRamp failed"
+            code = ctypes.windll.kernel32.GetLastError()
+            errormsg = format_windows_system_message(code).strip()
+            msg = "GetDeviceGammaRamp failed: %s [error %s]" % (errormsg, code)
+            raise Exception, msg
     elif "darwin" == sys.platform:
         error = carbon.CGGetDisplayTransferByTable(device, len(ramp_c[0]),
                      ramp_c[0], ramp_c[1], ramp_c[2], (ctypes.c_int * 1)())
         if error:
-            raise AssertionError, "CGSetDisplayTransferByTable failed"
+            msg = "CGGetDisplayTransferByTable failed [error %s]" % error
+            raise Exception, msg
     elif sys.platform.startswith("linux"):
         success = xf86vm.XF86VidModeGetGammaRamp(device, 0, len(ramp_c[0]),
                       ramp_c[0], ramp_c[1], ramp_c[2])
         if not success:
-            raise AssertionError, "XF86VidModeGetGammaRamp failed"
+            raise Exception, "XF86VidModeGetGammaRamp failed"
 
     ramp = [ramp_c[0][:], ramp_c[1][:], ramp_c[2][:]]
     return ramp
 
 
-def format_system_message(errno):
+def format_windows_system_message(errno):
     """
     Call FormatMessage with a system error number to retrieve
     the descriptive error message.
@@ -176,18 +180,12 @@ def format_system_message(errno):
     result_buffer = ctypes.wintypes.LPWSTR()
     buffer_size = 0
     arguments = None
-    bytes = ctypes.windll.kernel32.FormatMessageW(
-        flags,
-        source,
-        message_id,
-        language_id,
-        ctypes.byref(result_buffer),
-        buffer_size,
-        arguments,
-        )
+    bytes = ctypes.windll.kernel32.FormatMessageW(flags, source, message_id,
+        language_id, ctypes.byref(result_buffer), buffer_size, arguments,
+    )
     # note the following will cause an infinite loop if GetLastError
-    #  repeatedly returns an error that cannot be formatted, although
-    #  this should not happen.
+    # repeatedly returns an error that cannot be formatted, although
+    # this should not happen.
     if bytes == 0:
         raise WindowsError()
     message = result_buffer.value
