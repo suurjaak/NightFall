@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    27.01.2013
+@modified    03.02.2013
 """
 import datetime
 import math
@@ -15,10 +15,12 @@ import wx
 import wx.combo
 import wx.lib.agw.aquabutton
 import wx.lib.agw.flatnotebook
+import wx.lib.agw.genericmessagedialog
 import wx.lib.agw.gradientbutton
 import wx.lib.agw.thumbnailctrl
 import wx.lib.agw.ultimatelistctrl
 import wx.lib.newevent
+import wx.py
 
 import conf
 import gamma
@@ -138,14 +140,13 @@ class Dimmer(object):
             conf.ScheduleEnabled = enabled
             self.post_event("SCHEDULE TOGGLED", conf.ScheduleEnabled)
             conf.save()
+            factor, msg = conf.NormalDimmingFactor, "DIMMING OFF"
             if self.should_dim():
-                self.apply_factor(conf.DimmingFactor, fade=True)
+                factor = conf.DimmingFactor
                 msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() \
                       else "DIMMING ON"
-                self.post_event(msg, conf.DimmingFactor)
-            else:
-                self.apply_factor(conf.NormalDimmingFactor, fade=True)
-                self.post_event("DIMMING OFF", conf.NormalDimmingFactor)
+            self.apply_factor(factor, fade=True)
+            self.post_event(msg, factor)
 
 
     def toggle_startup(self, enabled):
@@ -168,14 +169,13 @@ class Dimmer(object):
             conf.Schedule = schedule[:]
             self.post_event("SCHEDULE CHANGED", conf.Schedule)
             conf.save()
+            factor, msg = conf.NormalDimmingFactor, "DIMMING OFF"
             if self.should_dim():
-                self.apply_factor(conf.DimmingFactor)
+                factor = conf.DimmingFactor
                 msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() \
                       else "DIMMING ON"
-                self.post_event(msg, conf.DimmingFactor)
-            else:
-                self.apply_factor(conf.NormalDimmingFactor)
-                self.post_event("DIMMING OFF", conf.NormalDimmingFactor)
+            self.apply_factor(factor, fade=True)
+            self.post_event(msg, factor)
 
 
     def should_dim(self):
@@ -313,6 +313,7 @@ class NightFall(wx.App):
             frame.Bind(wx.EVT_SCROLL, self.on_change_factor_detail, s)
             frame.Bind(wx.EVT_SLIDER, self.on_change_factor_detail, s)
         self.Bind(EVT_DIMMER,         self.on_dimmer_event)
+        self.Bind(wx.EVT_LEFT_DCLICK, self.on_toggle_console, frame.bmp_config)
 
         self.TRAYICONS = {False: {}, True: {}}
         # Cache tray icons in dicts [dimming now][schedule enabled]
@@ -357,7 +358,7 @@ class NightFall(wx.App):
                     if factor == data:
                         thumb = self.frame.list_factors.GetItem(i)
                         thumb.SetBitmap(bmp)
-                wx.MessageBox(
+                messageBox(self.frame,
                     "This factor is not supported by graphics hardware.",
                     conf.Title, wx.OK | wx.ICON_WARNING)
         elif "DIMMING TOGGLED" == topic:
@@ -388,6 +389,7 @@ class NightFall(wx.App):
 
 
     def on_change_stored_factor(self, event):
+        """Handler for selecting a stored factor, toggles buttons enabled."""
         selected = self.frame.list_factors.GetSelection()
         enabled = (selected >= 0)
         if enabled and not self.frame.button_saved_apply.Enabled:
@@ -436,10 +438,10 @@ class NightFall(wx.App):
             lst.ShowThumbs(thumbs, caption="")
             conf.StoredFactors.append(factor)
             conf.save()
-            wx.MessageBox("Factor added to saved factors.",
+            messageBox(self.frame, "Factor added to saved factors.",
                 conf.Title, wx.OK | wx.ICON_INFORMATION)
         else:
-            wx.MessageBox("Factor already in saved factors.",
+            messageBox(self.frame, "Factor already in saved factors.",
                 conf.Title, wx.OK | wx.ICON_WARNING)
 
 
@@ -447,7 +449,7 @@ class NightFall(wx.App):
         """Deletes the stored factor, if confirmed."""
         selected = self.frame.list_factors.GetSelection()
         if selected >= 0:
-            if wx.OK == wx.MessageBox(
+            if wx.ID_OK == messageBox(self.frame,
                 "Remove this factor from list?",
                 conf.Title, wx.OK | wx.CANCEL | wx.ICON_QUESTION
             ):
@@ -571,6 +573,16 @@ class NightFall(wx.App):
         self.trayicon.Destroy()
         self.frame.Destroy()
         self.Exit()
+
+
+    def on_toggle_console(self, event):
+        """
+        Handler for clicking to open the Python console, activated if
+        Ctrl-Alt-Shift is down.
+        """
+        if event.CmdDown() and event.ShiftDown():
+            self.frame_console.Show(not self.frame_console.Shown)
+
 
 
     def on_toggle_settings(self, event):
@@ -830,16 +842,23 @@ class NightFall(wx.App):
             b.SetPressedTopColour(wx.Colour(160, 160, 160))
             b.SetPressedBottomColour(wx.Colour(160, 160, 160))
         frame.button_ok.SetDefault()
+        frame.button_ok.SetToolTipString("Minimize window to tray [Escape]")
         panel_buttons.Sizer.Add(frame.button_ok)
         panel_buttons.Sizer.AddStretchSpacer()
         panel_buttons.Sizer.Add(frame.button_exit, flag=wx.ALIGN_RIGHT)
 
+        frame.Layout()
         wx.CallLater(0, lambda: notebook.SetSelection(0)) # Fix display
 
-        # Position window in lower right corner
-        frame.Layout()
-        x1, y1, x2, y2 = wx.GetClientDisplayRect()
+        x1, y1, x2, y2 = wx.GetClientDisplayRect() # Set in lower right corner
         frame.Position = (x2 - frame.Size.x, y2 - frame.Size.y)
+
+        self.frame_console = wx.py.shell.ShellFrame(parent=frame,
+          title=u"%s Console" % conf.Title, size=(800, 300)
+        )
+        self.frame_console.Bind(
+          wx.EVT_CLOSE, lambda evt: self.frame_console.Hide()
+        )
 
         icons = wx.IconBundle()
         icons.AddIcon(wx.IconFromBitmap(wx.Bitmap((conf.SettingsFrameIcon))))
@@ -1117,57 +1136,6 @@ class StartupService(object):
             shortcut.save()
 
 
-def get_factor_bitmap(factor, supported=True):
-    """
-    Returns a wx.Bitmap for the specified factor, with colour and brightness
-    information as both text and visual.
-    
-    @param   supported  whether the factor is supported by hardware
-    """
-    bmp = wx.Bitmap(conf.ListIcon)
-    dc = wx.MemoryDC(bmp)
-    brightness_ratio = (factor[0] - 128) / 255.
-    rgb = [min(255, int(i + i * brightness_ratio)) for i in factor[1:]]
-    colour = wx.Colour(*rgb)
-    colour_text = wx.WHITE if sum(rgb) < 255 * 2.3 else wx.Colour(64, 64, 64)
-    dc.SetBrush(wx.Brush(colour, wx.SOLID))
-    dc.SetPen(wx.Pen(colour if supported else wx.RED))
-    dc.DrawRectangle(*((8, 4, 32, 20) if supported else (7, 3, 34, 22)))
-    dc.SetTextForeground(colour_text)
-    dc.SetPen(wx.Pen(colour_text))
-    font = wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                   wx.FONTWEIGHT_BOLD, face="Tahoma")
-    dc.SetFont(font)
-    text = "%d%%" % math.ceil(100 * (factor[0] + 1) / conf.NormalBrightness)
-    width = dc.GetTextExtent(text)[0]
-    dc.DrawText(text, 8 + (34 - width) / 2, 8)
-    colour_text = wx.Colour(125, 125, 125) if supported else wx.RED
-    dc.SetTextForeground(colour_text)
-    dc.SetPen(wx.Pen(colour_text))
-    font = wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
-                   wx.FONTWEIGHT_BOLD, face="Arial")
-    dc.SetFont(font)
-    rgb = "#%2X%2X%2X" % (factor[1], factor[2], factor[3])
-    dc.DrawText(rgb, 2, 36)
-    
-    del dc
-    return bmp
-
-
-def get_factor_str(factor, supported=True, short=False):
-    """Returns a readable string representation of the factor."""
-    if short:
-        result = "%d%% brightness, #%2X%2X%2X" % (factor[0] / 128. * 100,
-                 factor[1], factor[2], factor[3])
-    else:
-        result = "%d%% brightness.\n%s" % (factor[0] / 128. * 100,
-                 ", ".join("%s at %d%%" % (s, factor[i + 1] / 255. * 100)
-                          for i, s in enumerate(("Red", "green", "blue"))))
-        if not supported:
-            result += "\n\nNot supported by hardware."
-    return result
-
-
 
 class BitmapListHandler(object):
     """
@@ -1270,6 +1238,70 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
             thumbinfo = get_factor_str(self.GetThumbFactor(index))
 
         return thumbinfo
+
+
+def get_factor_bitmap(factor, supported=True):
+    """
+    Returns a wx.Bitmap for the specified factor, with colour and brightness
+    information as both text and visual.
+    
+    @param   supported  whether the factor is supported by hardware
+    """
+    bmp = wx.Bitmap(conf.ListIcon)
+    dc = wx.MemoryDC(bmp)
+    brightness_ratio = (factor[0] - 128) / 255.
+    rgb = [min(255, int(i + i * brightness_ratio)) for i in factor[1:]]
+    colour = wx.Colour(*rgb)
+    colour_text = wx.WHITE if sum(rgb) < 255 * 2.3 else wx.Colour(64, 64, 64)
+    dc.SetBrush(wx.Brush(colour, wx.SOLID))
+    dc.SetPen(wx.Pen(colour if supported else wx.RED))
+    dc.DrawRectangle(*((8, 4, 32, 20) if supported else (7, 3, 34, 22)))
+    dc.SetTextForeground(colour_text)
+    dc.SetPen(wx.Pen(colour_text))
+    font = wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
+                   wx.FONTWEIGHT_BOLD, face="Tahoma")
+    dc.SetFont(font)
+    text = "%d%%" % math.ceil(100 * (factor[0] + 1) / conf.NormalBrightness)
+    width = dc.GetTextExtent(text)[0]
+    dc.DrawText(text, 8 + (34 - width) / 2, 8)
+    colour_text = wx.Colour(125, 125, 125) if supported else wx.RED
+    dc.SetTextForeground(colour_text)
+    dc.SetPen(wx.Pen(colour_text))
+    font = wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
+                   wx.FONTWEIGHT_BOLD, face="Arial")
+    dc.SetFont(font)
+    rgb = "#%2X%2X%2X" % (factor[1], factor[2], factor[3])
+    dc.DrawText(rgb, 2, 36)
+    
+    del dc
+    return bmp
+
+
+def get_factor_str(factor, supported=True, short=False):
+    """Returns a readable string representation of the factor."""
+    if short:
+        result = "%d%% brightness, #%2X%2X%2X" % (factor[0] / 128. * 100,
+                 factor[1], factor[2], factor[3])
+    else:
+        result = "%d%% brightness.\n%s" % (factor[0] / 128. * 100,
+                 ", ".join("%s at %d%%" % (s, factor[i + 1] / 255. * 100)
+                          for i, s in enumerate(("Red", "green", "blue"))))
+        if not supported:
+            result += "\n\nNot supported by hardware."
+    return result
+
+
+def messageBox(parent, message, caption, style):
+    """
+    Shows a non-native message box, with no bell sound for any style, centered
+    on parent, returning the message box result code."""
+    dlg = wx.lib.agw.genericmessagedialog.GenericMessageDialog(
+        parent=parent, message=message, caption=caption, agwStyle=style
+    )
+    dlg.CenterOnParent()
+    result = dlg.ShowModal()
+    dlg.Destroy()
+    return result
 
 
 
