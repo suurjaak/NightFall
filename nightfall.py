@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    03.02.2013
+@modified    05.04.2013
 """
 import datetime
 import math
@@ -919,7 +919,7 @@ class TimeSelector(wx.PyPanel):
         best = wx.Size(-1, -1)
         extent = self.GetFullTextExtent("24")#(width, height, descent, leading)
         best.height = (extent[1] + extent[2]) * 2 # label height * 2
-        best.width  = len(self.selections) * (extent[0] + 4)
+        best.width  = 24 * (extent[0] + 4)
         return best
 
 
@@ -1199,9 +1199,9 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
         # Hack to get around ThumbnailCtrl's internal monkey-patching
         setattr(self._scrolled, "GetThumbInfo", getattr(self, "_GetThumbInfo"))
         # To disable ThumbnailCtrl's rotation/deletion/etc
-        self._scrolled.Bind(wx.EVT_CHAR, None)
+        self._scrolled.Unbind(wx.EVT_CHAR)
         # To disable ThumbnailCtrl's zooming
-        self._scrolled.Bind(wx.EVT_MOUSEWHEEL, None)
+        self._scrolled.Unbind(wx.EVT_MOUSEWHEEL)
         self._scrolled.Bind(
             wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
             self.OnSelectionChanged)

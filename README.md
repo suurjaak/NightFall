@@ -2,7 +2,8 @@ NightFall
 ===========
 
 A small tray program for making screen colours darker and softer during
-late hours. Currently works under Windows, *might* work under Linux/OSX.
+late hours. Works well under Windows, verified to work under Linux,
+*might* work under OSX.
 
 Windows binaries at http://suurjaak.github.com/NightFall.
 
