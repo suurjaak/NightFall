@@ -12,11 +12,12 @@ import math
 import os
 import sys
 import wx
-import wx.combo
+import wx.adv
 import wx.lib.agw.aquabutton
 import wx.lib.agw.flatnotebook
 import wx.lib.agw.genericmessagedialog
 import wx.lib.agw.gradientbutton
+import wx.lib.agw.hyperlink
 import wx.lib.agw.thumbnailctrl
 import wx.lib.agw.ultimatelistctrl
 import wx.lib.newevent
@@ -320,11 +321,11 @@ class NightFall(wx.App):
         # Cache tray icons in dicts [dimming now][schedule enabled]
         for i, f in enumerate(conf.TrayIcons):
             dim, sch = False if i < 2 else True, True if i % 2 else False
-            self.TRAYICONS[dim][sch] = wx.IconFromBitmap(wx.Bitmap(f))
-        trayicon = self.trayicon = wx.TaskBarIcon()
+            self.TRAYICONS[dim][sch] = wx.Icon(wx.Bitmap(f))
+        trayicon = self.trayicon = wx.adv.TaskBarIcon()
         self.set_tray_icon(self.TRAYICONS[False][False])
-        trayicon.Bind(wx.EVT_TASKBAR_LEFT_DOWN, self.on_toggle_settings)
-        trayicon.Bind(wx.EVT_TASKBAR_RIGHT_DOWN, self.on_open_tray_menu)
+        trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DOWN, self.on_toggle_settings)
+        trayicon.Bind(wx.adv.EVT_TASKBAR_RIGHT_DOWN, self.on_open_tray_menu)
 
         self.dimmer.start()
         if conf.StartMinimizedParameter not in sys.argv:
@@ -341,17 +342,17 @@ class NightFall(wx.App):
             bmp, tooltip = get_factor_bitmap(data), get_factor_str(data)
             for b in [self.frame.bmp_config, self.frame.bmp_detail]:
                 b.SetBitmap(bmp)
-                b.SetToolTipString(tooltip)
+                b.SetToolTip(tooltip)
             self.frame.label_factor.Label = "Currently selected screen factor:"
             self.frame.label_factor.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNTEXT)
-            self.frame.combo_factors.ToolTipString = tooltip
+            self.frame.combo_factors.ToolTip = tooltip
             # @todo add to combo if not there
         elif "FACTOR FAILED" == topic:
             bmp = get_factor_bitmap(data, False)
             tooltip = get_factor_str(data, False)
             for b in [self.frame.bmp_config, self.frame.bmp_detail]:
                 b.SetBitmap(bmp)
-                b.SetToolTipString(tooltip)
+                b.SetToolTip(tooltip)
             self.frame.label_factor.Label = "Currently selected screen " \
                                             "factor is unsupported:"
             self.frame.label_factor.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
@@ -470,32 +471,33 @@ class NightFall(wx.App):
         """Creates and opens a popup menu for the tray icon."""
         menu = wx.Menu()
         menu._item_factors = {} # {MenuItem.Id: factor, }
+
         is_dimming = self.dimmer.should_dim()
         text = "&Turn " + ("current dimming off" if self.dimmer.should_dim()
                           else "dimming on")
-        item = menu.AppendCheckItem(id=-1, text=text)
+        item = menu.Append(-1, text, kind=wx.ITEM_CHECK)
         item.Check(is_dimming)
         menu.Bind(wx.EVT_MENU, self.on_toggle_dimming_tray, id=item.GetId())
-        item = menu.AppendCheckItem(id=-1, text="Dim during &scheduled hours")
+        item = menu.Append(-1, "Dim during &scheduled hours", kind=wx.ITEM_CHECK,)
         item.Check(conf.ScheduleEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
         menu.AppendSeparator()
         menu_factor = wx.Menu()
         for i in range(self.frame.list_factors.GetItemCount()):
             factor = self.frame.list_factors.GetThumbFactor(i)
-            item = menu_factor.AppendCheckItem(id=-1,
-                text=get_factor_str(factor, short=True))
+            item = menu_factor.Append(1, get_factor_str(factor, short=True), kind=wx.ITEM_CHECK)
             item.Check(is_dimming and factor == conf.DimmingFactor)
             menu.Bind(wx.EVT_MENU, self.on_menu_stored_factor, id=item.GetId())
             menu._item_factors[item.GetId()] = factor # For event handling
-        menu.AppendMenu(id=-1, text="Apply saved &factor", submenu=menu_factor)
+        menu.Append(-1, "Apply saved &factor", menu_factor)
         item = wx.MenuItem(menu, -1, "&Options")
         item.Enable(not self.frame.Shown)
         menu.Bind(wx.EVT_MENU, self.on_toggle_settings, id=item.GetId())
-        menu.AppendItem(item)
+        menu.Append(item)
         item = wx.MenuItem(menu, -1, "E&xit NightFall")
         menu.Bind(wx.EVT_MENU, self.on_exit, id=item.GetId())
-        menu.AppendItem(item)
+        menu.Append(item)
+
         self.trayiconmenu = menu
         self.trayicon.PopupMenu(menu)
 
@@ -576,7 +578,7 @@ class NightFall(wx.App):
         self.trayicon.RemoveIcon()
         self.trayicon.Destroy()
         self.frame.Destroy()
-        self.Exit()
+        wx.CallAfter(sys.exit) # Immediate exit fails if exiting from tray
 
 
     def on_toggle_console(self, event):
@@ -675,7 +677,7 @@ class NightFall(wx.App):
 
         cb_enabled = frame.cb_enabled = wx.CheckBox(panel, label="Dim now")
         cb_enabled.SetValue(conf.DimmingEnabled)
-        cb_enabled.ToolTipString = "Apply dimming settings now"
+        cb_enabled.ToolTip = "Apply dimming settings now"
         sizer.Add(cb_enabled, border=5, flag=wx.ALL)
 
         notebook = frame.notebook = wx.lib.agw.flatnotebook.FlatNotebook(panel)
@@ -738,7 +740,7 @@ class NightFall(wx.App):
             bitmapsize=conf.FactorIconSize, style=wx.CB_READONLY)
         combo_factors.SetPopupMaxHeight(200)
         panel_factor.Sizer.Add(combo_factors, flag=wx.ALIGN_RIGHT)
-        panel_middle.Sizer.Add(panel_factor, flag=wx.ALIGN_RIGHT)
+        panel_middle.Sizer.Add(panel_factor)
         panel_todo.Sizer.Add(panel_middle, proportion=1, border=5, flag=wx.GROW | wx.ALL)
 
         panel_version = wx.Panel(panel_todo)
@@ -746,19 +748,18 @@ class NightFall(wx.App):
         cb_startup = frame.cb_startup = wx.CheckBox(
             panel_version, label="Run %s at computer startup" % conf.Title
         )
-        cb_startup.ToolTipString = "Adds NightFall to startup programs"
+        cb_startup.ToolTip = "Adds NightFall to startup programs"
         panel_version.Sizer.Add(cb_startup, border=5, flag=wx.LEFT)
         panel_version.Sizer.AddStretchSpacer()
         text = wx.StaticText(panel_version,
             label="v%s, %s   " % (conf.Version, conf.VersionDate))
         text.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
-        panel_version.Sizer.Add(text, flag=wx.ALIGN_RIGHT)
-        frame.link_www = wx.HyperlinkCtrl(panel_version, id=-1,
-            label="github", url=conf.HomeUrl)
-        frame.link_www.ToolTipString = "Go to source code repository " \
-                                      "at %s" % conf.HomeUrl
+        panel_version.Sizer.Add(text)
+        frame.link_www = wx.lib.agw.hyperlink.HyperLinkCtrl(panel_version, id=-1,
+            label="github", URL=conf.HomeUrl)
+        frame.link_www.ToolTip = "Go to source code repository at %s" % conf.HomeUrl
         panel_version.Sizer.Add(frame.link_www, border=5,
-                                flag=wx.ALIGN_RIGHT | wx.RIGHT)
+                                flag=wx.RIGHT)
         panel_todo.Sizer.Add(panel_version, border=2, flag=wx.GROW | wx.ALL)
 
         # Create config page, with time selector and scheduling checkboxes
@@ -772,12 +773,11 @@ class NightFall(wx.App):
         panel_factor.Sizer.AddStretchSpacer()
         frame.label_factor = wx.StaticText(panel_factor,
             label="Currently selected screen factor:")
-        panel_factor.Sizer.Add(frame.label_factor, border=5,
-            flag=wx.ALL | wx.ALIGN_RIGHT)
+        panel_factor.Sizer.Add(frame.label_factor, border=5, flag=wx.ALL)
         frame.bmp_config = wx.StaticBitmap(panel_factor,
             bitmap=get_factor_bitmap(conf.DimmingFactor))
-        frame.bmp_config.SetToolTipString(get_factor_str(conf.DimmingFactor))
-        panel_factor.Sizer.Add(frame.bmp_config, flag=wx.ALIGN_RIGHT)
+        frame.bmp_config.SetToolTip(get_factor_str(conf.DimmingFactor))
+        panel_factor.Sizer.Add(frame.bmp_config)
         panel_config.Sizer.Add(panel_factor, border=5, flag=wx.GROW | wx.ALL)
 
         panel_time = frame.panel_time = wx.Panel(panel_config)
@@ -797,19 +797,19 @@ class NightFall(wx.App):
         cb_startup = frame.cb_startup = wx.CheckBox(
             panel_version, label="Run %s at computer startup" % conf.Title
         )
-        cb_startup.ToolTipString = "Adds NightFall to startup programs"
+        cb_startup.ToolTip = "Adds NightFall to startup programs"
         panel_version.Sizer.Add(cb_startup, border=5, flag=wx.LEFT)
         panel_version.Sizer.AddStretchSpacer()
         text = wx.StaticText(panel_version,
             label="v%s, %s   " % (conf.Version, conf.VersionDate))
         text.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
-        panel_version.Sizer.Add(text, flag=wx.ALIGN_RIGHT)
-        frame.link_www = wx.HyperlinkCtrl(panel_version, id=-1,
-            label="github", url=conf.HomeUrl)
-        frame.link_www.ToolTipString = "Go to source code repository " \
+        panel_version.Sizer.Add(text)
+        frame.link_www = wx.lib.agw.hyperlink.HyperLinkCtrl(panel_version, id=-1,
+            label="github", URL=conf.HomeUrl)
+        frame.link_www.ToolTip = "Go to source code repository " \
                                       "at %s" % conf.HomeUrl
         panel_version.Sizer.Add(frame.link_www, border=5,
-                                flag=wx.ALIGN_RIGHT | wx.RIGHT)
+                                flag=wx.RIGHT)
         panel_config.Sizer.Add(panel_version, border=2, flag=wx.GROW | wx.ALL)
 
 
@@ -838,7 +838,7 @@ class NightFall(wx.App):
         button_apply.Enabled = button_delete.Enabled = False
         panel_saved_buttons.Sizer.Add(button_apply)
         panel_saved_buttons.Sizer.AddStretchSpacer()
-        panel_saved_buttons.Sizer.Add(button_delete, flag=wx.ALIGN_RIGHT)
+        panel_saved_buttons.Sizer.Add(button_delete)
 
         # Create expert settings page, with RGB sliders and color sample panel
         text_detail = wx.StaticText(panel_detailedfactor,
@@ -869,7 +869,7 @@ class NightFall(wx.App):
             tooltip = "Change %s colour channel" % text if i \
                       else "Change brightness (center is default, higher " \
                            "goes brighter than normal)"
-            slider.ToolTipString = tooltip
+            slider.ToolTip = tooltip
             sliders.append(slider)
             panel_sliders.Sizer.Add(slider, proportion=1, flag=wx.GROW)
         panel_sliders.Sizer.AddSpacer(0)
@@ -899,7 +899,7 @@ class NightFall(wx.App):
         frame.button_exit = wx.lib.agw.gradientbutton.GradientButton(
             panel_buttons, label="Exit program", size=(100, -1))
         for b in (frame.button_ok, frame.button_exit):
-            bold_font = wx.SystemSettings_GetFont(wx.SYS_DEFAULT_GUI_FONT)
+            bold_font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
             bold_font.SetWeight(wx.BOLD)
             b.SetFont(bold_font)
             b.SetTopStartColour(wx.Colour(96, 96, 96))
@@ -909,10 +909,10 @@ class NightFall(wx.App):
             b.SetPressedTopColour(wx.Colour(160, 160, 160))
             b.SetPressedBottomColour(wx.Colour(160, 160, 160))
         frame.button_ok.SetDefault()
-        frame.button_ok.SetToolTipString("Minimize window to tray [Escape]")
+        frame.button_ok.SetToolTip("Minimize window to tray [Escape]")
         panel_buttons.Sizer.Add(frame.button_ok, border=5, flag=wx.TOP)
         panel_buttons.Sizer.AddStretchSpacer()
-        panel_buttons.Sizer.Add(frame.button_exit, border=5, flag=wx.ALIGN_RIGHT | wx.TOP)
+        panel_buttons.Sizer.Add(frame.button_exit, border=5, flag=wx.TOP)
 
         frame.Layout()
         #wx.CallLater(0, lambda: notebook.SetSelection(0)) # Fix display @todo use or lose
@@ -929,14 +929,14 @@ class NightFall(wx.App):
         self.frame_console.Show() # @todo remove when done dev
 
         icons = wx.IconBundle()
-        icons.AddIcon(wx.IconFromBitmap(wx.Bitmap((conf.SettingsFrameIcon))))
+        icons.AddIcon(wx.Icon(wx.Bitmap((conf.SettingsFrameIcon))))
         frame.SetIcons(icons)
         frame.ToggleWindowStyle(wx.STAY_ON_TOP)
         return frame
 
 
 
-class TimeSelector(wx.PyPanel):
+class TimeSelector(wx.Panel):
     """
     A horizontal slider for selecting any number of periods from 24 hours,
     configured for an hour step.
@@ -950,7 +950,7 @@ class TimeSelector(wx.PyPanel):
                              the minimum selectable step. Defaults to a quarter
                              hour step.
         """
-        wx.PyPanel.__init__(self, parent, id, pos, size,
+        wx.Panel.__init__(self, parent, id, pos, size,
             style | wx.FULL_REPAINT_ON_RESIZE, name
         )
         self.selections = selections[:]
@@ -960,9 +960,9 @@ class TimeSelector(wx.PyPanel):
         self.penult_unit   = None # Last but one unit, to detect move backwards
         self.dragback_unit = None # Unit on a section edge dragged backwards
         self.SetInitialSize(self.GetMinSize())
-        self.SetToolTipString("Click and drag with left or right button to "
+        self.SetToolTip("Click and drag with left or right button to "
             "select or deselect,\ndouble-click to toggle an hour")
-        self.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         self.AcceptsFocus = self.AcceptsFocusFromKeyboard = lambda: False
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
@@ -1149,7 +1149,7 @@ class TimeSelector(wx.PyPanel):
 
 
 
-class ClockSelector(wx.PyPanel):
+class ClockSelector(wx.Panel):
     COLOUR_BG     = wx.WHITE
     COLOUR_CLOCK  = wx.WHITE#"#C0C0FF" #"#DA9100"
     COLOUR_ON     = wx.Colour(241, 184, 45, 140)#"#F1B82D"#"#DAA520" #"#DA9100" #wx.BLUE
@@ -1175,7 +1175,7 @@ class ClockSelector(wx.PyPanel):
                              hour step.
         @todo praeguse kella seier võiks ka olla.
         """
-        wx.PyPanel.__init__(self, parent, id, pos, size,
+        wx.Panel.__init__(self, parent, id, pos, size,
             style | wx.FULL_REPAINT_ON_RESIZE, name
         )
 
@@ -1200,9 +1200,9 @@ class ClockSelector(wx.PyPanel):
         self.hourlines     = None # [(x1, y1, x2, y2), ]
         self.hourtexts     = None # ["00", ]
         self.SetInitialSize(self.GetMinSize())
-        #self.SetToolTipString("Click and drag with left or right button to "
+        #self.SetToolTip("Click and drag with left or right button to "
         #    "select or deselect,\ndouble-click to toggle an hour")
-        self.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+        self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         self.AcceptsFocus = self.AcceptsFocusFromKeyboard = lambda: False
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
@@ -1491,7 +1491,7 @@ class ClockSelector(wx.PyPanel):
         sz = self.GetClientSize()
         sz.width = max(1, sz.width)
         sz.height = max(1, sz.height)
-        self.buffer = wx.EmptyBitmap(sz.width, sz.height, 32)
+        self.buffer = wx.Bitmap(sz.width, sz.height, 32)
 
         dc = wx.MemoryDC(self.buffer)
         dc.SetBackground(wx.Brush(ClockSelector.COLOUR_BG))
@@ -1559,9 +1559,9 @@ class ClockSelector(wx.PyPanel):
             #path.CloseSubpath()
 
         # Draw hour texts
-        gc.SetFont(self.Font)
+        gc.SetFont(gc.CreateFont(self.Font))
         #gc.SetFont(wx.Font(6, self.Font.Family, self.Font.Style,
-        #                   self.Font.Weight, face=self.Font.FaceName))
+        #                   self.Font.Weight, faceName=self.Font.FaceName))
         textwidth, textheight = self.GetTextExtent("02")
         for i, text in enumerate(self.hourtexts):
             if width / 6 < 2.8 * textwidth and i % 2:
@@ -1569,10 +1569,10 @@ class ClockSelector(wx.PyPanel):
             point = self.hourtext_xys[i]
             #if i % 2:
             #    gc.SetFont(wx.Font(5, self.Font.Family, self.Font.Style,
-            #                       self.Font.Weight, face=self.Font.FaceName))
+            #                       self.Font.Weight, faceName=self.Font.FaceName))
             #else:
             #    gc.SetFont(wx.Font(8, self.Font.Family, self.Font.Style,
-            #                       self.Font.Weight, face=self.Font.FaceName))
+            #                       self.Font.Weight, faceName=self.Font.FaceName))
             gc.DrawText(text, *point)
 
         #dc.DrawLineList(self.hourlines)
@@ -1944,7 +1944,7 @@ class StartupService(object):
 
 
 
-class FactorComboBox(wx.combo.OwnerDrawnComboBox):
+class FactorComboBox(wx.adv.OwnerDrawnComboBox):
     """"""
 
     def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition,
@@ -1954,7 +1954,7 @@ class FactorComboBox(wx.combo.OwnerDrawnComboBox):
         @param   choices  a list of dimming factors
         """
         textvalue = "" if selected is None else repr(choices[selected])
-        wx.combo.OwnerDrawnComboBox.__init__(self, parent, id=id, 
+        wx.adv.OwnerDrawnComboBox.__init__(self, parent, id=id, 
             value=textvalue, pos=pos, size=size, choices=map(repr, choices), 
             style=style, name=name)
         self._factors = choices[:]
@@ -1970,7 +1970,7 @@ class FactorComboBox(wx.combo.OwnerDrawnComboBox):
 
         factor = self._factors[item]
         bmp = get_factor_bitmap(factor)
-        #if flags & wx.combo.ODCB_PAINTING_CONTROL:
+        #if flags & wx.adv.ODCB_PAINTING_CONTROL:
             # for painting the control itself
         #else:
             # for painting the items in the popup
@@ -1992,8 +1992,8 @@ class FactorComboBox(wx.combo.OwnerDrawnComboBox):
 
 
     def OnDrawBackground(self, dc, rect, item, flags):
-        if flags & wx.combo.ODCB_PAINTING_SELECTED \
-        and not (flags & wx.combo.ODCB_PAINTING_CONTROL):
+        if flags & wx.adv.ODCB_PAINTING_SELECTED \
+        and not (flags & wx.adv.ODCB_PAINTING_CONTROL):
             bgCol = wx.Colour(0, 127, 255)
         else:
             bgCol = self.BackgroundColour
@@ -2051,7 +2051,7 @@ class BitmapListHandler(wx.lib.agw.thumbnailctrl.NativeImageHandler):
         @param  filename  
         :param `thumbnailsize`: the desired size of the thumbnail.
         """
-        img = wx.ImageFromBitmap(self._bitmaps[os.path.basename(filename)])
+        img = self._bitmaps[os.path.basename(filename)].ConvertToImage()
 
         originalsize = (img.GetWidth(), img.GetHeight())
         alpha = img.HasAlpha()
@@ -2126,7 +2126,7 @@ def get_factor_bitmap(factor, supported=True):
     
     @param   supported  whether the factor is supported by hardware
     """
-    bmp = wx.EmptyBitmap(*conf.FactorIconSize)
+    bmp = wx.Bitmap(*conf.FactorIconSize)
     dc = wx.MemoryDC(bmp)
     #dc.SetBackground(wx.Brush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW), wx.SOLID))
     brightness_ratio = (factor[0] - 48) / 255.
@@ -2142,35 +2142,35 @@ def get_factor_bitmap(factor, supported=True):
     text = random.choice(["light orange", "warm", "dark warm", "UV blue", "dim gray", "%d%%  " % (100 * factor[0] / 255.) + "#" + "".join(map(lambda x: "%02X" % x, factor[:3]))])
     textsize = 13
     font = wx.Font(textsize, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                   wx.FONTWEIGHT_BOLD, face="Tahoma")
+                   wx.FONTWEIGHT_BOLD, faceName="Tahoma")
     dc.SetFont(font)
-    width, height, lineheight = dc.GetMultiLineTextExtent(text)
+    width, height = dc.GetMultiLineTextExtent(text)
     text_orig = text
     while textsize > 7 and (width > bmp.Size.width - 4 or height > bmp.Size.height - 4):
         textsize -= 1
         font = wx.Font(textsize, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                       wx.FONTWEIGHT_BOLD, face="Tahoma")
+                       wx.FONTWEIGHT_BOLD, faceName="Tahoma")
         dc.SetFont(font)
         text = wx.lib.wordwrap.wordwrap(text_orig, bmp.Size.width, dc, breakLongWords=False)
-        width, height, lineheight = dc.GetMultiLineTextExtent(text)
+        width, height = dc.GetMultiLineTextExtent(text)
 
     ystart = 2 if height >= bmp.Size.height else (bmp.Size.height - height) / 2 - 2
     if sum(rgb) > 255 * 2.6 or factor[0] > 128:
         dc.SetTextForeground(wx.BLACK) # @todo clear hack
         for i, line in enumerate(text.split("\n")):
             linewidth, _ = dc.GetTextExtent(line)
-            #dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * lineheight + 1)
-            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * lineheight + 0)
-            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * lineheight + 1)
-            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * lineheight + 0)
-            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * lineheight + 1)
-            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * lineheight - 1)
-            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * lineheight - 1)
-            #dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * lineheight)
+            #dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * height + 1)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * height + 0)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * height + 1)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * height + 0)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * height + 1)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * height - 1)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * height - 1)
+            #dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * height)
         dc.SetTextForeground(wx.WHITE) # @todo clear hack
     for i, line in enumerate(text.split("\n")):
         linewidth, _ = dc.GetTextExtent(line)
-        dc.DrawText(line, (bmp.Size.width - linewidth) / 2, ystart + i * lineheight)
+        dc.DrawText(line, (bmp.Size.width - linewidth) / 2, ystart + i * height)
 
     dc.SetBrush(wx.Brush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW), wx.SOLID))
     dc.SetPen(wx.Pen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)))
@@ -2179,7 +2179,7 @@ def get_factor_bitmap(factor, supported=True):
     dc.SetTextForeground(colour_text)
     dc.SetPen(wx.Pen(colour_text))
     font = wx.Font(7, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
-                   wx.FONTWEIGHT_BOLD, face="Arial")
+                   wx.FONTWEIGHT_BOLD, faceName="Arial")
     dc.SetFont(font)
     rgb = "#%2X%2X%2X" % (factor[1], factor[2], factor[3])
     #dc.DrawText(rgb, 2, 31)
