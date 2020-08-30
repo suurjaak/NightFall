@@ -306,6 +306,7 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_BUTTON,     self.on_stored_factor, frame.button_saved_apply)
         frame.Bind(wx.EVT_BUTTON,     self.on_delete_factor, frame.button_saved_delete)
         frame.Bind(wx.EVT_BUTTON,     self.on_save_factor, frame.button_save)
+        frame.Bind(wx.EVT_COMBOBOX,   self.on_change_factor_combo, frame.combo_factors)
         frame.Bind(EVT_TIME_SELECTOR, self.on_change_schedule)
         frame.Bind(wx.EVT_CLOSE,      self.on_toggle_settings)
         frame.Bind(wx.EVT_ACTIVATE,   self.on_deactivate_settings)
@@ -342,7 +343,9 @@ class NightFall(wx.App):
                 b.SetBitmap(bmp)
                 b.SetToolTipString(tooltip)
             self.frame.label_factor.Label = "Currently selected screen factor:"
-            self.frame.label_factor.ForegroundColour = wx.BLACK
+            self.frame.label_factor.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNTEXT)
+            self.frame.combo_factors.ToolTipString = tooltip
+            # @todo add to combo if not there
         elif "FACTOR FAILED" == topic:
             bmp = get_factor_bitmap(data, False)
             tooltip = get_factor_str(data, False)
@@ -351,7 +354,7 @@ class NightFall(wx.App):
                 b.SetToolTipString(tooltip)
             self.frame.label_factor.Label = "Currently selected screen " \
                                             "factor is unsupported:"
-            self.frame.label_factor.ForegroundColour = wx.RED
+            self.frame.label_factor.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
             self.frame.label_factor.ContainingSizer.Layout()
             if "APPLY SAVED" == info:
                 for i, factor in enumerate(conf.StoredFactors):
@@ -468,12 +471,12 @@ class NightFall(wx.App):
         menu = wx.Menu()
         menu._item_factors = {} # {MenuItem.Id: factor, }
         is_dimming = self.dimmer.should_dim()
-        text = "Turn " + ("current dimming off" if self.dimmer.should_dim()
+        text = "&Turn " + ("current dimming off" if self.dimmer.should_dim()
                           else "dimming on")
         item = menu.AppendCheckItem(id=-1, text=text)
         item.Check(is_dimming)
         menu.Bind(wx.EVT_MENU, self.on_toggle_dimming_tray, id=item.GetId())
-        item = menu.AppendCheckItem(id=-1, text="Dim during scheduled hours")
+        item = menu.AppendCheckItem(id=-1, text="Dim during &scheduled hours")
         item.Check(conf.ScheduleEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
         menu.AppendSeparator()
@@ -485,11 +488,12 @@ class NightFall(wx.App):
             item.Check(is_dimming and factor == conf.DimmingFactor)
             menu.Bind(wx.EVT_MENU, self.on_menu_stored_factor, id=item.GetId())
             menu._item_factors[item.GetId()] = factor # For event handling
-        menu.AppendMenu(id=-1, text="Apply saved factor", submenu=menu_factor)
-        item = wx.MenuItem(menu, -1, "Options")
+        menu.AppendMenu(id=-1, text="Apply saved &factor", submenu=menu_factor)
+        item = wx.MenuItem(menu, -1, "&Options")
+        item.Enable(not self.frame.Shown)
         menu.Bind(wx.EVT_MENU, self.on_toggle_settings, id=item.GetId())
         menu.AppendItem(item)
-        item = wx.MenuItem(menu, -1, "Exit NightFall")
+        item = wx.MenuItem(menu, -1, "E&xit NightFall")
         menu.Bind(wx.EVT_MENU, self.on_exit, id=item.GetId())
         menu.AppendItem(item)
         self.trayiconmenu = menu
@@ -584,7 +588,6 @@ class NightFall(wx.App):
             self.frame_console.Show(not self.frame_console.Shown)
 
 
-
     def on_toggle_settings(self, event):
         """Handler for clicking to toggle settings window visible/hidden."""
         if self.frame_hider: # Window is sliding closed
@@ -634,6 +637,12 @@ class NightFall(wx.App):
         self.dimmer.set_factor(factor, "APPLY DETAILED")
 
 
+    def on_change_factor_combo(self, event):
+        """Handler for changing the factor combobox."""
+        factor = self.frame.combo_factors.GetItemFactor(event.Selection)
+        self.dimmer.set_factor(factor, "FACTOR CHANGED")
+
+
     def on_toggle_dimming(self, event):
         """Handler for toggling dimming on/off."""
         self.dimmer.toggle_dimming(event.IsChecked())
@@ -658,7 +667,7 @@ class NightFall(wx.App):
         """Creates and returns the settings window."""
         frame = wx.Frame(parent=None, title=conf.Title,
             size=conf.SettingsFrameSize,
-            style=wx.CAPTION | wx.SYSTEM_MENU | wx.CLOSE_BOX | wx.STAY_ON_TOP
+            #style=wx.CAPTION | wx.SYSTEM_MENU | wx.CLOSE_BOX | wx.STAY_ON_TOP @todo enable
         )
 
         panel = frame.panel = wx.Panel(frame)
@@ -676,29 +685,86 @@ class NightFall(wx.App):
             | wx.lib.agw.flatnotebook.FNB_NO_NAV_BUTTONS
             | wx.lib.agw.flatnotebook.FNB_NODRAG
             | wx.lib.agw.flatnotebook.FNB_NO_TAB_FOCUS)
-        notebook.SetGradientColourFrom(wx.Colour(255, 255, 255))
-        notebook.SetGradientColourTo(notebook.Parent.BackgroundColour)
-        notebook.SetNonActiveTabTextColour(wx.Colour(128, 128, 128))
-        sizer.Add(notebook, border=5, flag=wx.GROW | wx.LEFT | wx.RIGHT)
+        notebook.SetGradientColourFrom(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW))
+        notebook.SetGradientColourTo(wx.SystemSettings.GetColour(wx.SYS_COLOUR_BTNFACE))
+        notebook.SetNonActiveTabTextColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
+        sizer.Add(notebook, proportion=1, border=5, flag=wx.GROW | wx.LEFT | wx.RIGHT)
 
+        panel_todo = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
+        panel_todo.Sizer = wx.BoxSizer(wx.VERTICAL)
+        panel_todo.BackgroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
+        notebook.AddPage(panel_todo, "Configuration ")
         panel_config = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
         panel_config.Sizer = wx.BoxSizer(wx.VERTICAL)
-        panel_config.BackgroundColour = wx.WHITE
-        notebook.AddPage(panel_config, "Configuration ")
+        panel_config.BackgroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
+        notebook.AddPage(panel_config, "Old Configuration ")
         panel_savedfactors = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
         panel_savedfactors.Sizer = wx.BoxSizer(wx.VERTICAL)
-        panel_savedfactors.BackgroundColour = wx.WHITE
+        panel_savedfactors.BackgroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
         notebook.AddPage(panel_savedfactors, "Saved factors ")
         panel_detailedfactor = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
         panel_detailedfactor.Sizer = wx.BoxSizer(wx.VERTICAL)
-        panel_detailedfactor.BackgroundColour = wx.WHITE
+        panel_detailedfactor.BackgroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
         notebook.AddPage(panel_detailedfactor, "Expert settings ")
 
+        # Create @todo config page, with time selector and scheduling checkboxes
+        text = wx.StaticText(panel_todo, label=conf.InfoText,
+                             style=wx.ALIGN_CENTER)
+        text.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
+        panel_todo.Sizer.Add(text, border=5, flag=wx.ALL | wx.ALIGN_CENTER)
+
+        cb_schedule = frame.cb_schedule = wx.CheckBox(panel_todo,
+            label="Apply automatically during the highlighted hours:"
+        )
+        panel_todo.Sizer.Add(cb_schedule, border=5, flag=wx.ALL)
+
+        panel_middle = wx.Panel(panel_todo)
+        panel_middle.Sizer = wx.BoxSizer(wx.HORIZONTAL)
+        selector_time = frame.selector_time = \
+            ClockSelector(panel_middle, selections=[0] * 24 * 4)#conf.Schedule)
+        panel_middle.Sizer.Add(selector_time, proportion=1, border=5, flag=wx.GROW | wx.ALL)
+        panel_factor = wx.Panel(panel_middle)
+        panel_factor.Sizer = wx.BoxSizer(wx.VERTICAL)
+        frame.label_factor = wx.StaticText(panel_factor,
+            label="Current colour:")
+        panel_factor.Sizer.Add(frame.label_factor)
+
+        choices = conf.StoredFactors[:]
+        if conf.DimmingFactor not in conf.StoredFactors:
+            choices.insert(0, conf.DimmingFactor)
+        selected = choices.index(conf.DimmingFactor)
+        combo_factors = frame.combo_factors = FactorComboBox(panel_factor, 
+            choices=choices, selected=selected, 
+            bitmapsize=conf.FactorIconSize, style=wx.CB_READONLY)
+        combo_factors.SetPopupMaxHeight(200)
+        panel_factor.Sizer.Add(combo_factors, flag=wx.ALIGN_RIGHT)
+        panel_middle.Sizer.Add(panel_factor, flag=wx.ALIGN_RIGHT)
+        panel_todo.Sizer.Add(panel_middle, proportion=1, border=5, flag=wx.GROW | wx.ALL)
+
+        panel_version = wx.Panel(panel_todo)
+        panel_version.Sizer = wx.BoxSizer(wx.HORIZONTAL)
+        cb_startup = frame.cb_startup = wx.CheckBox(
+            panel_version, label="Run %s at computer startup" % conf.Title
+        )
+        cb_startup.ToolTipString = "Adds NightFall to startup programs"
+        panel_version.Sizer.Add(cb_startup, border=5, flag=wx.LEFT)
+        panel_version.Sizer.AddStretchSpacer()
+        text = wx.StaticText(panel_version,
+            label="v%s, %s   " % (conf.Version, conf.VersionDate))
+        text.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
+        panel_version.Sizer.Add(text, flag=wx.ALIGN_RIGHT)
+        frame.link_www = wx.HyperlinkCtrl(panel_version, id=-1,
+            label="github", url=conf.HomeUrl)
+        frame.link_www.ToolTipString = "Go to source code repository " \
+                                      "at %s" % conf.HomeUrl
+        panel_version.Sizer.Add(frame.link_www, border=5,
+                                flag=wx.ALIGN_RIGHT | wx.RIGHT)
+        panel_todo.Sizer.Add(panel_version, border=2, flag=wx.GROW | wx.ALL)
 
         # Create config page, with time selector and scheduling checkboxes
         text = wx.StaticText(panel_config, label=conf.InfoText,
                              style=wx.ALIGN_CENTER)
-        text.ForegroundColour = wx.Colour(92, 92, 92)
+        text.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
         panel_config.Sizer.Add(text, border=5, flag=wx.ALL | wx.ALIGN_CENTER)
         panel_config.Sizer.AddStretchSpacer()
         panel_factor = wx.Panel(panel_config)
@@ -720,9 +786,9 @@ class NightFall(wx.App):
             label="Apply automatically during the highlighted hours:"
         )
         panel_time.Sizer.Add(cb_schedule, border=3, flag=wx.ALL)
-        selector_time = frame.selector_time = \
+        selector_time_todo_old = frame.selector_time_todo_old = \
             TimeSelector(panel_time, selections=conf.Schedule)
-        panel_time.Sizer.Add(selector_time, border=10, flag=wx.GROW)
+        panel_time.Sizer.Add(selector_time_todo_old, border=10, flag=wx.GROW)
         panel_config.Sizer.Add(panel_time, border=5, flag=wx.GROW | wx.ALL)
         panel_config.Sizer.AddStretchSpacer()
 
@@ -736,7 +802,7 @@ class NightFall(wx.App):
         panel_version.Sizer.AddStretchSpacer()
         text = wx.StaticText(panel_version,
             label="v%s, %s   " % (conf.Version, conf.VersionDate))
-        text.ForegroundColour = wx.Colour(92, 92, 92)
+        text.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
         panel_version.Sizer.Add(text, flag=wx.ALIGN_RIGHT)
         frame.link_www = wx.HyperlinkCtrl(panel_version, id=-1,
             label="github", url=conf.HomeUrl)
@@ -748,8 +814,9 @@ class NightFall(wx.App):
 
 
         # Create saved factors page
-        list_factors = frame.list_factors = BitmapListCtrl(panel_savedfactors)
+        list_factors = frame.list_factors = BitmapListCtrl(panel_savedfactors, bitmapsize=conf.FactorIconSize)
         list_factors.MinSize = (-1, 180)
+        list_factors.SetHighlightPointed(True)
         thumbs = []
         for i, factor in enumerate(conf.StoredFactors):
             bmp = get_factor_bitmap(factor)
@@ -776,7 +843,7 @@ class NightFall(wx.App):
         # Create expert settings page, with RGB sliders and color sample panel
         text_detail = wx.StaticText(panel_detailedfactor,
             style=wx.ALIGN_CENTER, label=conf.InfoDetailedText)
-        text_detail.ForegroundColour = wx.Colour(92, 92, 92)
+        text_detail.ForegroundColour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
         panel_detailedfactor.Sizer.Add(text_detail, border=5,
             flag=wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
         panel_detailedfactor.Sizer.AddStretchSpacer()
@@ -816,14 +883,14 @@ class NightFall(wx.App):
         panel_colorshower.Sizer = wx.BoxSizer(wx.VERTICAL)
         panel_color = frame.panel_color = wx.Panel(panel_colorshower)
         panel_color.Sizer = wx.BoxSizer(wx.VERTICAL)
-        panel_color.SetMinSize((60, 60))
+        panel_color.SetMinSize(conf.FactorIconSize)
         frame.bmp_detail = wx.StaticBitmap(panel_color,
             bitmap=get_factor_bitmap(conf.DimmingFactor))
         panel_color.Sizer.Add(frame.bmp_detail,flag=wx.ALIGN_RIGHT)
         panel_colorshower.Sizer.Add(panel_color, wx.GROW)
         panel_colorpicker.Sizer.Add(panel_colorshower)
 
-        sizer.AddStretchSpacer()
+        #sizer.AddStretchSpacer()
         panel_buttons = frame.panel_buttons = wx.Panel(panel)
         panel_buttons.Sizer = wx.BoxSizer(wx.HORIZONTAL)
         sizer.Add(panel_buttons, border=5, flag=wx.GROW | wx.ALL)
@@ -843,12 +910,12 @@ class NightFall(wx.App):
             b.SetPressedBottomColour(wx.Colour(160, 160, 160))
         frame.button_ok.SetDefault()
         frame.button_ok.SetToolTipString("Minimize window to tray [Escape]")
-        panel_buttons.Sizer.Add(frame.button_ok)
+        panel_buttons.Sizer.Add(frame.button_ok, border=5, flag=wx.TOP)
         panel_buttons.Sizer.AddStretchSpacer()
-        panel_buttons.Sizer.Add(frame.button_exit, flag=wx.ALIGN_RIGHT)
+        panel_buttons.Sizer.Add(frame.button_exit, border=5, flag=wx.ALIGN_RIGHT | wx.TOP)
 
         frame.Layout()
-        wx.CallLater(0, lambda: notebook.SetSelection(0)) # Fix display
+        #wx.CallLater(0, lambda: notebook.SetSelection(0)) # Fix display @todo use or lose
 
         x1, y1, x2, y2 = wx.GetClientDisplayRect() # Set in lower right corner
         frame.Position = (x2 - frame.Size.x, y2 - frame.Size.y)
@@ -859,6 +926,7 @@ class NightFall(wx.App):
         self.frame_console.Bind(
           wx.EVT_CLOSE, lambda evt: self.frame_console.Hide()
         )
+        self.frame_console.Show() # @todo remove when done dev
 
         icons = wx.IconBundle()
         icons.AddIcon(wx.IconFromBitmap(wx.Bitmap((conf.SettingsFrameIcon))))
@@ -1081,6 +1149,745 @@ class TimeSelector(wx.PyPanel):
 
 
 
+class ClockSelector(wx.PyPanel):
+    COLOUR_BG     = wx.WHITE
+    COLOUR_CLOCK  = wx.WHITE#"#C0C0FF" #"#DA9100"
+    COLOUR_ON     = wx.Colour(241, 184, 45, 140)#"#F1B82D"#"#DAA520" #"#DA9100" #wx.BLUE
+    COLOUR_OFF    = "#EBECFF"#"#E1E2FF"#"#C0C0FF"
+    COLOUR_CENTER = wx.BLACK
+    COLOUR_TEXT   = wx.BLACK
+    COLOUR_LINES  = wx.BLACK
+    COLOUR_TIME   = wx.RED
+    RADIUS_CENTER = 20
+    ANGLE_START   = -math.pi / 2 # In polar coordinates
+
+    """
+    A horizontal slider for selecting any number of periods from 24 hours,
+    configured for an hour step.
+    """
+    def __init__(self, parent, id=-1, pos=wx.DefaultPosition,
+                 size=(400, 400), style=0, name=wx.PanelNameStr,
+                 selections=[0]*24*4):
+        """
+        @param   selections  the selections to use, as [0,1,] for each time
+                             unit in 24 hours. Length of selections determines
+                             the minimum selectable step. Defaults to a quarter
+                             hour step.
+        @todo praeguse kella seier võiks ka olla.
+        """
+        wx.PyPanel.__init__(self, parent, id, pos, size,
+            style | wx.FULL_REPAINT_ON_RESIZE, name
+        )
+
+        ClockSelector.COLOUR_BG     = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
+        ClockSelector.COLOUR_CLOCK  = wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)
+        ClockSelector.COLOUR_ON     = wx.Colour(241, 184, 45, 140)#"#F1B82D"#"#DAA520" #"#DA9100" #wx.BLUE
+        ClockSelector.COLOUR_OFF    = "#EBECFF"#"#E1E2FF"#"#C0C0FF"
+        ClockSelector.COLOUR_CENTER = wx.Colour(204, 113, 53)
+        ClockSelector.COLOUR_TEXT   = wx.BLACK
+        ClockSelector.COLOUR_LINES  = wx.BLACK
+        ClockSelector.COLOUR_TIME   = wx.RED
+
+
+        self.USE_GC        = True # Use GraphicsContext instead of DC
+        self.buffer        = None # Bitmap buffer
+        self.selections    = selections[:]
+        self.sticky_value  = None # True|False|None if selecting|de-|nothing
+        self.last_unit     = None # Last changed time unit
+        self.penult_unit   = None # Last but one unit, to detect move backwards
+        self.dragback_unit = None # Unit on a section edge dragged backwards
+        self.sectors       = None # [(angle, radius, ptlist), ]
+        self.hourlines     = None # [(x1, y1, x2, y2), ]
+        self.hourtexts     = None # ["00", ]
+        self.SetInitialSize(self.GetMinSize())
+        #self.SetToolTipString("Click and drag with left or right button to "
+        #    "select or deselect,\ndouble-click to toggle an hour")
+        self.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+        self.AcceptsFocus = self.AcceptsFocusFromKeyboard = lambda: False
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
+        self.Bind(wx.EVT_MOUSE_EVENTS, self.OnMouseEvent)
+        self.timer = wx.Timer()
+        self.timer.Bind(wx.EVT_TIMER, self.on_timer, self.timer)
+        self.timer.Start(milliseconds=1000 * 30) # Fire timer every 30 seconds
+
+
+    def on_timer(self, event):
+        if self.USE_GC:
+            self.InitBuffer()
+            self.Refresh()
+
+
+    def OnSize(self, event):
+        """Size event handler, forces control back to rectangular size."""
+        min_size = self.MinSize
+        self.Size = (max(min_size[0], min(self.Size)), max(min_size[1], min(self.Size)))
+        # @todo calc sectors and polygons
+        LENGTH = len(self.selections)
+        self.sectors       = []
+        self.hourlines     = []
+        self.hourtexts     = []
+        self.hourtext_xys  = []
+        last_line = None
+        self.todo = []
+        notch_xys = []
+        width, height = self.Size
+        radius = width / 2
+        radius_linestart = radius / 2
+        pt_center = radius, radius
+        lead = (width / 24 - self.GetFullTextExtent("24")[0]) / 2 # center text
+        hour_y = [2, height - 16] # alternating Y coordinates of hour texts
+        notch_y = [(0, 2), (height - 2, height)] # alternating notch Y1,Y2
+
+
+        def polar_to_canvas(angle, radius, x=None, y=None):
+            """
+            Convert polar coordinates to canvas coordinates (in polar, zero
+            point starts from the center - ordinary Cartesian system.
+            On canvas, zero starts from top left and grows down and right.)
+
+            @param   angle   polar angle where the x or y coordinate are at
+            @param   radius  polar radius of the (x, y)
+            @return          (x, y) or (x) or (y), depending on input arguments
+            """
+            xval, yval = None, None
+            angle = (angle + 2 * math.pi) % (2 * math.pi)
+            xval = None if x is None else x + radius
+            yval = None if y is None else radius - y
+            """
+            if 0 <= angle < math.pi / 2:
+                xval = None if x is None else x + radius
+                yval = None if y is None else radius - y
+            elif math.pi / 2 <= angle < math.pi:
+                xval = None if x is None else x + radius
+                yval = None if y is None else radius - y
+            elif math.pi <= angle < 3 * math.pi / 2:
+                xval = None if x is None else x + radius
+                yval = None if y is None else radius - y
+            else:
+                xval = None if x is None else x + radius
+                yval = None if y is None else radius - y
+            """
+
+            return yval if xval is None else ((xval, yval) if yval else xval)
+
+
+        def rad2ang(rad):
+            return int(180 * rad / math.pi)
+
+        """
+        for i, text in enumerate(["%02d" % h for h in range(24)]):
+            angle = ((360) / 24) * (i) * math.pi / 180 - (math.pi / 2)
+            angle2 = ((360) / 24) * ((i + 12) % 24) * math.pi / 180 - (math.pi / 2)
+            #x1, y1 = radius * (1 + math.cos(angle)), radius * (1 + math.sin(angle))
+            #x2, y2 = radius * (1 + math.cos(angle2)), radius * (1 + math.sin(angle2))
+            x1, y1 = radius_linestart * (math.cos(angle)) + radius, radius_linestart * (math.sin(angle)) + radius
+            x2, y2 = 10 * radius * (math.cos(angle)) + radius, 10 * radius * (math.sin(angle)) + radius
+            self.todo.append((radius, angle, angle2, x1, y1, x2, y2))
+            self.hourtexts.append(text)
+            x = i * width / 24
+            text_xys.append((x + lead, hour_y[i % 2]))
+            self.hourlines.append((x1, y1, x2, y2))
+            x1, y1 = pt_center
+            if last_line:
+                self.sectors.append([(x1, y1), (x2, y2), last_line[1], last_line[0], ])
+            last_line = ((x1, y1), (x2, y2))
+        """
+
+
+        """
+        # All polar angles need - to map to graphics context.
+        # All (x,y) from polar coordinates need (-radius, +radius).
+        # -----------------------------------
+        # |                                 |
+        # |                                 |
+        # |                                 |
+        # |                                 |
+        # |                               --|
+        # |                          --     |
+        # |                     --          |
+        # |                o ---------------|
+        # |                                 |
+        # |                                 |
+        # |                                 |
+        # |                                 |
+        # |                                 |
+        # |                                 |
+        # |                                 |
+        # -----------------------------------
+        """
+
+        """
+        for i, text in enumerate(["%02d" % h for h in [21, 22, 14, 23, 13, 0, 12, 1, 11, 2, 10, ]]):
+            x = i * width / 24 * 2
+            self.hourtext_xys.append((x + lead, hour_y[i % 2]))
+            self.hourtexts.append(text)
+        """
+        # @todo lahendus: tsentreeri tekst punkti ümber
+        HOUR_RADIUS_RATIO = 6 / 8.
+        textwidth, textheight = self.GetTextExtent("02")
+        for i, text in enumerate(["%02d" % h for h in range(24)]):
+            angle = ClockSelector.ANGLE_START - i * 2 * math.pi / 24. - (2 * math.pi / 48.)
+            x_polar, y_polar = HOUR_RADIUS_RATIO * radius * math.cos(angle), HOUR_RADIUS_RATIO * radius * math.sin(angle)
+            #x_polar, y_polar = radius * math.cos(angle), radius - 5
+            x, y = polar_to_canvas(angle, radius, x=x_polar, y=y_polar)
+            x, y = x - textwidth / 2, y - textheight / 2
+            alpha = math.pi / 2 - (angle - math.pi)
+            radius_ray = radius / math.sin(alpha)
+            #print "text=%s, x=%s, y=%s, y_polar=%s, angle=%s(%s), alpha=%s(%s), radius_ray=%s, radius=%s." % (text, x, y, y_polar, angle, rad2ang(angle), alpha, rad2ang(alpha), radius_ray, radius)
+            self.hourtext_xys.append((x, y))
+            self.hourtexts.append(text)
+
+        """
+        for i, text in enumerate(["%02d" % h for h in [21, 22, 23, 0, 1, 2]]):
+            # Angle starts from 135 and goes counterclockwise
+            angle = 3 * math.pi / 4. - i * 2 * math.pi / 24. - (2 * math.pi / 48.)
+
+            #x_polar, y_polar = 4 * radius / 7 * math.cos(angle), 4 * radius / 7 * math.sin(angle)
+            #x, y = polar_to_canvas(angle, radius, x=x_polar, y=y_polar)
+            #alpha = math.pi / 2 - (angle - math.pi)
+            #radius_ray = radius / math.sin(alpha)
+            x_polar, y_polar = HOUR_RADIUS_RATIO * radius * math.cos(angle), HOUR_RADIUS_RATIO * radius * math.sin(angle)
+            #x_polar, y_polar = radius * math.cos(angle), radius - 5
+            x, y = polar_to_canvas(angle, radius, x=x_polar, y=y_polar)
+            x, y = x - textwidth / 2, y - textheight / 2
+            alpha = math.pi / 2 - (angle - math.pi)
+            radius_ray = radius / math.sin(alpha)
+            #print "text=%s, x=%s, y=%s, y_polar=%s, angle=%s(%s), alpha=%s(%s), radius_ray=%s, radius=%s." % (text, x, y, y_polar, angle, rad2ang(angle), alpha, rad2ang(alpha), radius_ray, radius)
+            self.hourtext_xys.append((x, y))
+            self.hourtexts.append(text)
+        for i, text in enumerate(["%02d" % h for h in [14, 13, 12, 11, 10, 9]]):
+            # Angle starts from 225 and goes clockwise
+            angle = 5 * math.pi / 4. + i * 2 * math.pi / 24. + (math.pi / 24.)
+            x_polar, y_polar = HOUR_RADIUS_RATIO * radius * math.cos(angle), HOUR_RADIUS_RATIO * radius * math.sin(angle)
+            #x_polar, y_polar = radius * math.cos(angle), 20 - radius
+            x, y = polar_to_canvas(angle, radius, x=x_polar, y=y_polar)
+            x, y = x - textwidth / 2, y - textheight / 2
+            alpha = math.pi / 2 - (angle - math.pi)
+            radius_ray = radius / math.sin(alpha)
+            #print "text=%s, x=%s, y=%s, y_polar=%s, angle=%s(%s), alpha=%s(%s), radius_ray=%s, radius=%s." % (text, x, y, y_polar, angle, rad2ang(angle), alpha, rad2ang(alpha), radius_ray, radius)
+            self.hourtext_xys.append((x, y))
+            self.hourtexts.append(text)
+        for i, text in enumerate(["%02d" % h for h in [3, 4, 5, 6, 7, 8]]):
+            # Angle starts from 45 and goes clockwise
+            angle = math.pi / 4 - (i) * 2 * math.pi / 24. - (2 * math.pi / 48.)
+            x_polar, y_polar = HOUR_RADIUS_RATIO * radius * math.cos(angle), HOUR_RADIUS_RATIO * radius * math.sin(angle)
+            #x_polar, y_polar = radius - 15, (radius - 15) / math.cos(angle) * math.sin(angle)
+            x, y = polar_to_canvas(angle, radius, x=x_polar, y=y_polar)
+            x, y = x - textwidth / 2, y - textheight / 2
+            alpha = math.pi / 2 - (angle - math.pi)
+            radius_ray = radius / math.sin(alpha)
+            #print "text=%s, x=%s, y=%s, y_polar=%s, angle=%s(%s), alpha=%s(%s), radius_ray=%s, radius=%s." % (text, x, y, y_polar, angle, rad2ang(angle), alpha, rad2ang(alpha), radius_ray, radius)
+            self.hourtext_xys.append((x, y))
+            self.hourtexts.append(text)
+        for i, text in enumerate(["%02d" % h for h in [15, 16, 17, 18, 19, 20]]):
+            # Angle starts from 225 and goes counterclockwise
+            angle = 5 * math.pi / 4. - (i) * 2 * math.pi / 24. - (2 * math.pi / 48.)
+            alpha = math.pi / 2 - (angle - math.pi)
+            x = 5.
+            x_polar, y_polar = HOUR_RADIUS_RATIO * radius * math.cos(angle), HOUR_RADIUS_RATIO * radius * math.sin(angle)
+#            x_polar, y_polar = 5 - radius, -radius / math.tan(alpha)
+            x, y = polar_to_canvas(angle, radius, x=x_polar, y=y_polar)
+            x, y = x - textwidth / 2, y - textheight / 2
+            radius_ray = radius / math.sin(alpha)
+            #print "text=%s, x=%s, y=%s, y_polar=%s, angle=%s(%s), alpha=%s(%s), radius_ray=%s, radius=%s." % (text, x, y, y_polar, angle, rad2ang(angle), alpha, rad2ang(alpha), radius_ray, radius)
+            self.hourtext_xys.append((x, y))
+            self.hourtexts.append(text)
+        """
+
+        """
+        for i, text in enumerate(["%02d" % h for h in range(24)]):
+            angle = ClockSelector.ANGLE_START - i * 2 * math.pi / 24. - (2 * math.pi / 48.)
+            x_polar, y_polar = HOUR_RADIUS_RATIO * radius * math.cos(angle), HOUR_RADIUS_RATIO * radius * math.sin(angle)
+        """
+
+        for i in range(LENGTH):
+            angle = math.pi + (2 * math.pi) / LENGTH * (i) + ClockSelector.ANGLE_START
+            #angle2 = ((360) / 24) * ((i + 12) % 24) * math.pi / 180 - (math.pi / 2)
+            #x1, y1 = radius * (1 + math.cos(angle)), radius * (1 + math.sin(angle))
+            #x2, y2 = radius * (1 + math.cos(angle2)), radius * (1 + math.sin(angle2))
+            alpha = angle % (math.pi / 2) # force into 90deg
+            alpha = alpha if alpha < math.pi / 4 else math.pi / 2 - alpha
+            #alpha = math.pi / 2 - (angle - math.pi)
+            if alpha:
+                radius_ray = (radius - 1) / math.cos(alpha)
+            else:
+                radius_ray = radius
+            radius_start = radius_linestart
+            if alpha == math.pi / 4:
+                radius_ray -= 8
+            if not i % 12:
+                radius_start *= 0.8
+            #radius_ray -= 12
+            x1, y1 = radius_start * (math.cos(angle)) + radius, radius_start * (math.sin(angle)) + radius
+            x2, y2 = radius_ray * (math.cos(angle)) + radius, radius_ray * (math.sin(angle)) + radius
+            self.todo.append((radius, angle, x1, y1, x2, y2))
+            if not i % 4:
+                self.hourlines.append((x1, y1, x2, y2))
+            else:
+                #ptx1 = polar_to_canvas(angle, radius, x=(radius_ray - (3 if i % 2 else 10)) * (math.cos(angle)))
+                #pty1 = polar_to_canvas(angle, radius, y=(radius_ray - (3 if i % 2 else 10)) * (math.sin(angle)))
+                ptx1 = (radius_ray - (3 if i % 2 else 10)) * (math.cos(angle)) + radius
+                pty1 = (radius_ray - (3 if i % 2 else 10)) * (math.sin(angle)) + radius
+                notch_xys.append((ptx1, pty1, x2, y2))
+            x1, y1 = pt_center
+            if alpha == math.pi / 4:
+                radius_ray += 8
+                x2, y2 = radius_ray * (math.cos(angle)) + radius, radius_ray * (math.sin(angle)) + radius
+            if last_line:
+                self.sectors.append([(x1, y1), (x2, y2), last_line[1], last_line[0], ])
+            last_line = ((x1, y1), (x2, y2))
+            # @todo siin tuleks veel veerandtunni kriipsud ka tekitada
+        # Connect overflow
+        self.sectors.append([last_line[0], last_line[1], self.sectors[0][2], self.sectors[0][3]  ])
+        self.notch_xys = notch_xys
+        if self.USE_GC:
+            wx.CallAfter(self.InitBuffer)
+        event.Skip()
+
+
+    def SetSelections(self, selections):
+        """Sets the currently selected time periods, as a list of 0/1."""
+        refresh = (self.selections != selections)
+        self.selections = selections[:]
+        if refresh:
+            self.Refresh()
+
+
+    def GetSelections(self):
+        """Returns the currently selected schedule as a list of 0/1."""
+        return self.selections[:]
+
+
+    def GetMinSize(self):
+        """Returns the minimum needed size for the control."""
+        best = (100, 100)
+        #best = wx.Size(-1, -1) @todo use or lose
+        #extent = self.GetFullTextExtent("24")#(width, height, descent, leading)
+        #best.height = (extent[1] + extent[2]) * 2 # label height * 2
+        #best.width  = len(self.selections) * (extent[0] + 4)
+        return best
+
+
+    def OnPaint(self, event):
+        """Handler for paint event, uses double buffering to reduce flicker."""
+        #self.Draw(wx.GCDC(wx.BufferedPaintDC(self))) @todo check this out, seems promising
+        # wx.GraphicsContext is even better, with anti-aliasing etc. vt wxPython demo
+        # http://wxpython.org/docs/api/wx.GraphicsContext-class.html
+        # https://github.com/wxWidgets/Phoenix/blob/master/demo/GraphicsContext.py
+        if self.USE_GC:
+            dc = wx.BufferedPaintDC(self, self.buffer)
+        else:
+            self.DrawDC(wx.BufferedPaintDC(self))
+
+
+    def OnEraseBackground(self, event):
+        """Handles the wx.EVT_ERASE_BACKGROUND event."""
+        pass # Intentionally empty to reduce flicker.
+
+
+    def InitBuffer(self):
+        sz = self.GetClientSize()
+        sz.width = max(1, sz.width)
+        sz.height = max(1, sz.height)
+        self.buffer = wx.EmptyBitmap(sz.width, sz.height, 32)
+
+        dc = wx.MemoryDC(self.buffer)
+        dc.SetBackground(wx.Brush(ClockSelector.COLOUR_BG))
+        dc.Clear()
+        gc = wx.GraphicsContext.Create(dc)
+        self.Draw(gc)
+
+
+    def Draw(self, gc):
+        """Draws the custom selector control."""
+        width, height = self.Size
+        if not width or not height:
+            return
+
+        """
+        # Find enabled sections to simplify drawing
+        sections, start = [], None # sections=[(start, len), ]
+        for i, on in enumerate(self.selections):
+            if on and start is None:           # section start
+                start = i
+            elif not on and start is not None: # section end
+                sections.append((start, i - start))
+                start = None
+        if start is not None: # section reached the end
+            sections.append((start, i - start + 1))
+        units_per_pixel = len(self.selections) / float(width)
+        dc.Brush = wx.Brush(ClockSelector.COLOUR_ON, wx.SOLID)
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_ON)
+        for start, length in sections:
+            x, xwidth = start / units_per_pixel, length / units_per_pixel
+            if start + length == len(self.selections):
+                xwidth += 1 # Overstep to ensure selection fills the end
+            #dc.DrawRectangle(x, 0, xwidth, height)
+
+        # Write hours and draw hour lines
+
+
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_CLOCK, style=wx.TRANSPARENT)
+        dc.Brush = wx.Brush(ClockSelector.COLOUR_ON, wx.SOLID)
+        for i, sect in filter(lambda x: self.selections[x[0]], enumerate(self.sectors)):
+            dc.DrawPolygon(self.sectors[i])
+        """
+        radius = width / 2
+
+        # Draw clock background
+        gc.SetPen(wx.Pen(ClockSelector.COLOUR_LINES, style=wx.TRANSPARENT))
+        gc.SetBrush(wx.Brush(ClockSelector.COLOUR_OFF, wx.SOLID))
+        gc.DrawRoundedRectangle(0, 0, width - 1, height - 1, 18)
+
+        # Draw and fill all selected sctors
+        gc.SetPen(wx.Pen(ClockSelector.COLOUR_ON, style=wx.TRANSPARENT))
+        gc.SetBrush(wx.Brush(ClockSelector.COLOUR_ON, wx.SOLID))
+        for i, sect in filter(lambda x: self.selections[x[0]], enumerate(self.sectors)):
+            gc.DrawLines(self.sectors[i])
+
+        # Draw hour lines and smaller notches
+        gc.SetPen(wx.Pen(ClockSelector.COLOUR_LINES, width=1))
+        #path = gc.CreatePath()
+        for x1, y1, x2, y2 in self.hourlines:
+            gc.StrokeLines([(x1, y1), (x2, y2)])
+        for x1, y1, x2, y2 in self.notch_xys:
+            gc.StrokeLines([(x1, y1), (x2, y2)])
+            #path.MoveToPoint(x1, y1)
+            #path.AddLineToPoint(x2, y2)
+            #path.CloseSubpath()
+
+        # Draw hour texts
+        gc.SetFont(self.Font)
+        #gc.SetFont(wx.Font(6, self.Font.Family, self.Font.Style,
+        #                   self.Font.Weight, face=self.Font.FaceName))
+        textwidth, textheight = self.GetTextExtent("02")
+        for i, text in enumerate(self.hourtexts):
+            if width / 6 < 2.8 * textwidth and i % 2:
+                continue # continue for i, text in enumerate(..)
+            point = self.hourtext_xys[i]
+            #if i % 2:
+            #    gc.SetFont(wx.Font(5, self.Font.Family, self.Font.Style,
+            #                       self.Font.Weight, face=self.Font.FaceName))
+            #else:
+            #    gc.SetFont(wx.Font(8, self.Font.Family, self.Font.Style,
+            #                       self.Font.Weight, face=self.Font.FaceName))
+            gc.DrawText(text, *point)
+
+        #dc.DrawLineList(self.hourlines)
+
+        #import random
+        #for l in self.hourlines:
+        #    BLEND = 0.5
+        #    pts = [l[:2], l[2:]]
+        #    x = l[0] + BLEND * (l[2] - l[0]) + random.randint(0, 10);
+        #    y = l[1] + BLEND * (l[3] - l[1]) + random.randint(0, 10);
+        #    pts.insert(1, (x, y))
+        #    dc.DrawSpline(pts)
+        """
+        dc.TextForeground = ClockSelector.COLOUR_TEXT
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_TEXT)
+        dc.Font = self.Font
+        dc.DrawTextList(self.hourtexts, self.hourtext_xys)
+
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_CENTER, style=wx.SOLID)
+        dc.Brush = wx.Brush(ClockSelector.COLOUR_CENTER, wx.SOLID)
+        dc.DrawCircle(radius, radius, ClockSelector.RADIUS_CENTER)
+
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_LINES)
+        dc.Brush = wx.Brush(ClockSelector.COLOUR_OFF, wx.TRANSPARENT)
+        dc.DrawRoundedRectangle(0, 0, width, height, 8)
+        """
+
+        # Draw current time
+        LENGTH = len(self.selections)
+        tm = datetime.datetime.now().time()
+        hours = tm.hour + tm.minute / 60.
+        angle = (2 * math.pi / 24) * (hours) - ClockSelector.ANGLE_START
+        #hours = LENGTH * tm.second / 60 # @todo use or lose
+        #angle = (2 * math.pi / LENGTH) * (hours) - (math.pi / 2)
+        alpha = angle % (math.pi / 2) # force into 90deg
+        alpha = alpha if alpha < math.pi / 4 else math.pi / 2 - alpha
+        if alpha:
+            radius_ray = (radius - 1) / math.cos(alpha)
+        else:
+            radius_ray = radius
+        if alpha == math.pi / 4:
+            radius_ray -= 8
+        #radius_ray -= 12
+        x1, y1 = radius, radius
+        x2, y2 = radius_ray * (math.cos(angle)) + radius, radius_ray * (math.sin(angle)) + radius
+        gc.SetPen(wx.Pen(ClockSelector.COLOUR_TIME, style=wx.SOLID))
+        gc.SetBrush(wx.Brush(ClockSelector.COLOUR_TIME, wx.SOLID))
+        gc.StrokeLines([(x1, y1), (x2, y2)])
+
+        gc.SetPen(wx.Pen(ClockSelector.COLOUR_CENTER, style=wx.SOLID))
+        gc.SetBrush(wx.Brush(ClockSelector.COLOUR_CENTER, wx.SOLID))
+        step = ClockSelector.RADIUS_CENTER
+        gc.DrawEllipse(radius - step, radius - step, ClockSelector.RADIUS_CENTER * 2, ClockSelector.RADIUS_CENTER * 2)
+
+        # Refill corners
+        gc.SetPen(wx.Pen(ClockSelector.COLOUR_BG, style=wx.SOLID))
+        gc.SetBrush(wx.Brush(ClockSelector.COLOUR_BG, wx.SOLID))
+        CORNER_LINES = 18 - 7
+        for i in range(4):
+            x, y = 0 if i in [2, 3] else width - 1, 0 if i in [0, 3] else width - 1
+            # rect roundedborder - 6..0 ja igal korral läheb lühemaks
+            # x ja y sõltuvad ka vastavalt, õigemini
+            for j in range(CORNER_LINES, -1, -1):
+                x1, y1 = x + (j if i in [2, 3] else -j), y
+                x2, y2 = x1, y1 + (CORNER_LINES - j) * (1 if i in [0, 3] else -1)
+                gc.StrokeLines([(x1, y1), (x2, y2)])
+
+        gc.SetPen(wx.Pen(ClockSelector.COLOUR_LINES))
+        gc.SetBrush(wx.Brush(ClockSelector.COLOUR_OFF, wx.TRANSPARENT))
+        gc.DrawRoundedRectangle(0, 0, width - 1, height - 1, 18)
+
+
+
+
+    def DrawDC(self, dc):
+        """Draws the custom selector control."""
+        width, height = self.Size
+        if not width or not height:
+            return
+
+        dc.BackgroundColour = ClockSelector.COLOUR_BG
+        dc.Clear()
+
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_LINES)
+        dc.Brush = wx.Brush(ClockSelector.COLOUR_OFF, wx.SOLID)
+        dc.DrawRoundedRectangle(0, 0, width, height, 8)
+
+        #dc.SetPen(wx.Pen(ClockSelector.COLOUR_CLOCK))
+        #dc.SetBrush(wx.Brush(ClockSelector.COLOUR_CLOCK, wx.SOLID))
+        #dc.DrawEllipseRect((0, 0, width, height))
+
+        # Find enabled sections to simplify drawing
+        sections, start = [], None # sections=[(start, len), ]
+        for i, on in enumerate(self.selections):
+            if on and start is None:           # section start
+                start = i
+            elif not on and start is not None: # section end
+                sections.append((start, i - start))
+                start = None
+        if start is not None: # section reached the end
+            sections.append((start, i - start + 1))
+        units_per_pixel = len(self.selections) / float(width)
+        dc.Brush = wx.Brush(ClockSelector.COLOUR_ON, wx.SOLID)
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_ON)
+        for start, length in sections:
+            x, xwidth = start / units_per_pixel, length / units_per_pixel
+            if start + length == len(self.selections):
+                xwidth += 1 # Overstep to ensure selection fills the end
+            #dc.DrawRectangle(x, 0, xwidth, height)
+
+        # Write hours and draw hour lines
+        radius = width / 2
+
+
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_CLOCK, style=wx.TRANSPARENT)
+        dc.Brush = wx.Brush(ClockSelector.COLOUR_ON, wx.SOLID)
+        for i, sect in filter(lambda x: self.selections[x[0]], enumerate(self.sectors)):
+            dc.DrawPolygon(self.sectors[i])
+
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_LINES, width=1)
+        dc.DrawLineList(self.hourlines)
+
+        #import random
+        #for l in self.hourlines:
+        #    BLEND = 0.5
+        #    pts = [l[:2], l[2:]]
+        #    x = l[0] + BLEND * (l[2] - l[0]) + random.randint(0, 10);
+        #    y = l[1] + BLEND * (l[3] - l[1]) + random.randint(0, 10);
+        #    pts.insert(1, (x, y))
+        #    dc.DrawSpline(pts)
+        dc.TextForeground = ClockSelector.COLOUR_TEXT
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_TEXT)
+        dc.Font = self.Font
+        dc.DrawTextList(self.hourtexts, self.hourtext_xys)
+
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_CENTER, style=wx.SOLID)
+        dc.Brush = wx.Brush(ClockSelector.COLOUR_CENTER, wx.SOLID)
+        dc.DrawCircle(radius, radius, ClockSelector.RADIUS_CENTER)
+
+
+    def pointInPoly(self, point, pointsList):
+        """Is given point in polygon? 
+           Original (and UGLY) C code for this taken from: 
+           http://www.ecse.rpi.edu/~wrf/Research/Short_Notes/pnpoly.html
+           copy-paste-modified into (equally ugly) python. 
+           Feel free to use, rewrite, (and beautify?) without restriction.
+         ##__author__ = "Jacob Schwartz" 
+         ##__copyright__ = "Copyright (c) 2004" 
+         ##__license__ = "Public Domain" 
+         ##__version__ = "1.0" 
+        """
+        """Return True if point is contained in polygon (defined by given 
+        list of points.) -> Boolean 
+         """ 
+        assert len(pointsList) >= 3, 'Not enough points to define a polygon (I require 3 or more.)' 
+        assert len(point) >= 2, 'Not enough dimensions to define a point(I require 2 or more.)' 
+
+        # If given values are ints, code will fail subtly. Force them to floats. 
+        x, y = float(point[0]), float(point[1]) 
+        xp = [float(p[0]) for p in pointsList] 
+        yp = [float(p[1]) for p in pointsList] 
+
+        # Initialize loop 
+        c = False 
+        i = 0 
+        npol = len(pointsList) 
+        j = npol - 1 
+
+        while i < npol: 
+            if ((((yp[i] <= y) and (y < yp[j])) or 
+                ((yp[j] <= y) and (y <  yp[i]))) and 
+                (x < (xp[j] - xp[i]) * (y - yp[i]) / (yp[j] - yp[i]) + xp[i])): 
+                c = not c 
+            j = i 
+            i += 1 
+        return c
+
+
+    def OnMouseEvent(self, event):
+        """Handler for any and all mouse actions in the control."""
+        if not (self.Enabled and self.sectors):
+            return
+
+        center = [self.Size.width / 2] * 2
+        unit, x, y = None, event.Position.x, event.Position.y
+        dist_center = ((center[0] - x) ** 2 + (center[1] - y) ** 2) ** 0.5
+        if dist_center < ClockSelector.RADIUS_CENTER:
+            self.penult_unit = self.last_unit = None
+        else:
+            for i, sector in enumerate(self.sectors):
+                if self.pointInPoly((x, y), sector):
+                    unit = i
+                    break # break for i, sector in enumerate(..
+
+        refresh = False
+        if event.LeftDown() or event.RightDown():
+            self.CaptureMouse()
+            if 0 <= unit < len(self.selections):
+                self.penult_unit = None
+                self.last_unit, self.sticky_value = unit, int(event.LeftDown())
+                self.dragback_unit = None
+                if bool(self.selections[unit]) != event.LeftDown():
+                    self.selections[unit] = self.sticky_value
+                    refresh = True
+        elif event.LeftDClick() or event.RightDClick():
+            # Toggle an entire hour on double-click
+            if unit is not None:
+                steps = len(self.selections) / 24
+                low, hi = unit - unit % steps, unit - unit % steps + steps
+                units = self.selections[low:hi]
+                 # Toggle hour off on left-dclick only if all set
+                value = 0 if event.RightDClick() else int(not all(units))
+                self.selections[low:hi] = [value] * len(units)
+                refresh = (units != self.selections[low:hi])
+        elif event.LeftUp() or event.RightUp():
+            if self.HasCapture():
+                self.ReleaseMouse()
+            self.last_unit, self.sticky_value = None, None
+            self.penult_unit, self.dragback_unit = None, None
+        elif event.Dragging():
+            if self.sticky_value is not None and unit != self.last_unit \
+            and 0 <= unit < len(self.selections):
+                LENGTH = len(self.selections)
+                STARTS = range(2)
+                ENDS = range(LENGTH - 2, LENGTH)
+                def is_overflow(a, b):
+                    return (a in STARTS and b in ENDS) or (a in ENDS and b in STARTS)
+                def get_direction(a, b):
+                    result = 1 if b > a else -1
+                    result *= -1 if is_overflow(a, b) else 1
+                    return result
+
+                direction = get_direction(self.last_unit, unit)
+                #if self.dragback_unit is not None and not self.selections[unit]:
+                #    low = min((unit - direction) % LENGTH, self.last_unit)
+                #    hi  = max((unit - direction) % LENGTH, self.last_unit) + 1
+                #    self.selections[low:hi] = [0] * abs(hi - low)
+                #    self.sticky_value = self.dragback_unit = None
+                #    self.penult_unit = None
+                #    refresh = True
+                if is_overflow(self.last_unit, unit):
+                    last = unit + 1 if self.last_unit is None else self.last_unit
+                    low = min(unit, last)
+                    hi  = max(unit, last)
+                    units = self.selections[:low+1] + self.selections[hi:]
+                    self.selections[:low+1] = [self.sticky_value] * (low + 1)
+                    self.selections[hi:] = [self.sticky_value] * (LENGTH - hi)
+                    refresh = (units != (self.selections[:low] + self.selections[hi:]))
+                else:
+                    last = unit if self.last_unit is None else self.last_unit
+                    low = min(unit, last)
+                    hi  = max(unit, last) + 1
+                    units = self.selections[low:hi]
+                    self.selections[low:hi] = [self.sticky_value] * len(units)
+                    refresh = (units != self.selections[low:hi])
+
+                # Check if we should drag the enabled edge backwards
+                if (event.LeftIsDown() and self.penult_unit is not None):
+                    last_direction = get_direction(self.penult_unit, self.last_unit)
+                    # Did cursor just reverse direction
+                    is_turnabout = (direction != last_direction)
+                    #    ((unit < self.last_unit > self.penult_unit) @todo use or lose
+                    #    or (unit > self.last_unit < self.penult_unit))
+                    # Value to the other side of current moving direction
+                    prev_val = self.selections[(unit - direction) % LENGTH]
+                    # The unit right on the other side of the last unit
+                    edge_unit = (self.last_unit - direction) % LENGTH
+                    # Next unit in the current moving direction
+                    next_unit = (unit + direction) % LENGTH
+                    # Value of the edge unit
+                    edge_val = self.selections[edge_unit]
+                    # Value of the next unit, or None if beyond start/end
+                    next_val = self.selections[next_unit]
+                    # Drag back if we are already doing so, or if we just
+                    # turned around and the edge unit is off; but only if
+                    # we didn't just turn around during dragging into a
+                    # selected area, or if we are moving away from an edge
+                    # into unselected area.
+                    #print "direction=%s, last_direction=%s, is_turnabout=%s, edge_unit=%s, next_unit=%s, edge_val=%s, next_val=%s." % (direction, last_direction, is_turnabout, edge_unit, next_unit, edge_val, next_val)
+                    do_dragback = \
+                        ((self.dragback_unit is not None) or (is_turnabout
+                         and edge_val != self.selections[unit])) \
+                        and not (self.dragback_unit is not None
+                                 and is_turnabout and prev_val) \
+                        and next_val
+                        #and (self.last_unit != self.penult_unit or unit != self.penult_unit)
+                    if do_dragback:
+                        # Deselect from last to almost current 
+                        low = min((unit - direction) % LENGTH, self.last_unit)
+                        hi  = max((unit - direction) % LENGTH, self.last_unit) + 1
+                        #print "doing drag from to:", low, hi
+                        #print "direction=%s, last_direction=%s, is_turnabout=%s, edge_unit=%s, next_unit=%s, edge_val=%s, next_val=%s, unit=%s, last_unit=%s, penult_unit=%s." % (direction, last_direction, is_turnabout, edge_unit, next_unit, edge_val, next_val, unit, self.last_unit, self.penult_unit)
+                        self.dragback_unit = self.last_unit
+                        self.selections[low:hi] = [0] * abs(hi - low)
+                        refresh = True
+                        if not next_val:
+                            # Stop dragback if reaching a disabled area
+                            pass#self.dragback_unit = None @todo use or lose
+                    else:
+                        self.dragback_unit = None
+
+                self.penult_unit = self.last_unit
+                self.last_unit = unit
+        elif event.Leaving():
+            if not self.HasCapture():
+                self.last_unit, self.sticky_value = None, None
+                self.penult_unit, self.dragback_unit = None, None
+        if refresh:
+            self.InitBuffer()
+            self.Refresh()
+            event = TimeSelectorEvent()
+            wx.PostEvent(self.TopLevelParent.EventHandler, event)
+
+
+
 class StartupService(object):
     """
     Manages starting NightFall on system startup, if possible. Currently
@@ -1137,7 +1944,79 @@ class StartupService(object):
 
 
 
-class BitmapListHandler(object):
+class FactorComboBox(wx.combo.OwnerDrawnComboBox):
+    """"""
+
+    def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition,
+                 size=wx.DefaultSize, choices=[], selected=None,
+                 bitmapsize=wx.DefaultSize, style=0, name=""):
+        """
+        @param   choices  a list of dimming factors
+        """
+        textvalue = "" if selected is None else repr(choices[selected])
+        wx.combo.OwnerDrawnComboBox.__init__(self, parent, id=id, 
+            value=textvalue, pos=pos, size=size, choices=map(repr, choices), 
+            style=style, name=name)
+        self._factors = choices[:]
+        self._bitmapsize = wx.Size(*bitmapsize)
+        self.MinSize = self._bitmapsize.width + 24, self._bitmapsize.height + 4
+        self.SetPopupExtents(0, -1)
+
+
+    def OnDrawItem(self, dc, rect, item, flags):
+        if item == wx.NOT_FOUND:
+            # painting the control, but there is no valid item selected yet
+            return
+
+        factor = self._factors[item]
+        bmp = get_factor_bitmap(factor)
+        #if flags & wx.combo.ODCB_PAINTING_CONTROL:
+            # for painting the control itself
+        #else:
+            # for painting the items in the popup
+
+        #dc.DrawBitmap(bmp, rect.x, rect.y, useMask=1)
+        #dc.SetBrush(wx.Brush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)))
+        #dc.SetPen(wx.Pen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)))
+        #dc.SetPen(wx.Pen(wx.Colour(200, 200, 200)))
+        #dc.DrawRectangle(rect.x, rect.y, self.Size.width - rect.x, self.Size.height + 2)
+        dc_bmp = wx.MemoryDC(bmp)
+        #print "blitting", (rect.x, rect.y, self._bitmapsize[0], self._bitmapsize[1], dc_bmp, 0, 0)
+        #print "blitting", (rect.x, rect.y, rect.width, rect.height, dc_bmp, 0, 0)
+        dc.Blit(rect.x + 1, rect.y + 1, self._bitmapsize.width + 1, self._bitmapsize.height, dc_bmp, 0, 0)
+
+
+    def GetItemFactor(self, index):
+        """Returns the dimming factor at index."""
+        return self._factors[index]
+
+
+    def OnDrawBackground(self, dc, rect, item, flags):
+        if flags & wx.combo.ODCB_PAINTING_SELECTED \
+        and not (flags & wx.combo.ODCB_PAINTING_CONTROL):
+            bgCol = wx.Colour(0, 127, 255)
+        else:
+            bgCol = self.BackgroundColour
+        #dc.SetBrush(wx.Brush(bgCol))
+        dc.SetBrush(wx.TRANSPARENT_BRUSH)
+        dc.SetPen(wx.Pen(bgCol))
+        dc.DrawRectangle(rect.x, rect.y, self._bitmapsize.width + 2, self._bitmapsize.height + 2)
+
+
+    # Overridden from OwnerDrawnComboBox, should return the height
+    # needed to display an item in the popup, or -1 for default
+    def OnMeasureItem(self, item):
+        return self._bitmapsize.height + 2
+
+
+    # Overridden from OwnerDrawnComboBox.  Callback for item width, or
+    # -1 for default/undetermined
+    def OnMeasureItemWidth(self, item):
+        return self._bitmapsize.width + 2
+
+
+
+class BitmapListHandler(wx.lib.agw.thumbnailctrl.NativeImageHandler):
     """
     Image loader for wx.lib.agw.thumbnailctrl.ThumbnailCtrl using
     pre-loaded bitmaps.
@@ -1185,7 +2064,7 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
     """A ThumbnailCtrl that can simply show bitmaps, with files not on disk."""
 
     def __init__(self, parent, id=wx.ID_ANY, pos=wx.DefaultPosition,
-                 size=wx.DefaultSize,
+                 size=wx.DefaultSize, bitmapsize=wx.DefaultSize,
                  thumboutline=wx.lib.agw.thumbnailctrl.THUMB_OUTLINE_FULL,
                  thumbfilter=wx.lib.agw.thumbnailctrl.THUMB_FILTER_IMAGES,
                  imagehandler=BitmapListHandler):
@@ -1195,7 +2074,7 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
         self.SetDropShadow(False)
         self.EnableToolTips(True)
         self.ShowFileNames(False)
-        self.SetThumbSize(68, 47, 6)
+        self.SetThumbSize(bitmapsize[0], bitmapsize[1], border=6)
         # Hack to get around ThumbnailCtrl's internal monkey-patching
         setattr(self._scrolled, "GetThumbInfo", getattr(self, "_GetThumbInfo"))
         # To disable ThumbnailCtrl's rotation/deletion/etc
@@ -1247,32 +2126,91 @@ def get_factor_bitmap(factor, supported=True):
     
     @param   supported  whether the factor is supported by hardware
     """
-    bmp = wx.Bitmap(conf.ListIcon)
+    bmp = wx.EmptyBitmap(*conf.FactorIconSize)
     dc = wx.MemoryDC(bmp)
-    brightness_ratio = (factor[0] - 128) / 255.
+    #dc.SetBackground(wx.Brush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW), wx.SOLID))
+    brightness_ratio = (factor[0] - 48) / 255.
     rgb = [min(255, int(i + i * brightness_ratio)) for i in factor[1:]]
     colour = wx.Colour(*rgb)
-    colour_text = wx.WHITE if sum(rgb) < 255 * 2.3 else wx.Colour(64, 64, 64)
-    dc.SetBrush(wx.Brush(colour, wx.SOLID))
-    dc.SetPen(wx.Pen(colour if supported else wx.RED))
-    dc.DrawRectangle(*((8, 4, 32, 20) if supported else (7, 3, 34, 22)))
+    colour_text = wx.WHITE if sum(rgb) < 255 * 2.6 else wx.Colour(64, 64, 64)
+    dc.SetBackground(wx.Brush(colour))
+    dc.Clear()
     dc.SetTextForeground(colour_text)
     dc.SetPen(wx.Pen(colour_text))
-    font = wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
+    text = "%d%%" % math.ceil(100 * (factor[0] + 1) / conf.NormalBrightness)
+    import random
+    text = random.choice(["light orange", "warm", "dark warm", "UV blue", "dim gray", "%d%%  " % (100 * factor[0] / 255.) + "#" + "".join(map(lambda x: "%02X" % x, factor[:3]))])
+    textsize = 13
+    font = wx.Font(textsize, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
                    wx.FONTWEIGHT_BOLD, face="Tahoma")
     dc.SetFont(font)
-    text = "%d%%" % math.ceil(100 * (factor[0] + 1) / conf.NormalBrightness)
-    width = dc.GetTextExtent(text)[0]
-    dc.DrawText(text, 8 + (34 - width) / 2, 8)
+    width, height, lineheight = dc.GetMultiLineTextExtent(text)
+    text_orig = text
+    while textsize > 7 and (width > bmp.Size.width - 4 or height > bmp.Size.height - 4):
+        textsize -= 1
+        font = wx.Font(textsize, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
+                       wx.FONTWEIGHT_BOLD, face="Tahoma")
+        dc.SetFont(font)
+        text = wx.lib.wordwrap.wordwrap(text_orig, bmp.Size.width, dc, breakLongWords=False)
+        width, height, lineheight = dc.GetMultiLineTextExtent(text)
+
+    ystart = 2 if height >= bmp.Size.height else (bmp.Size.height - height) / 2 - 2
+    if sum(rgb) > 255 * 2.6 or factor[0] > 128:
+        dc.SetTextForeground(wx.BLACK) # @todo clear hack
+        for i, line in enumerate(text.split("\n")):
+            linewidth, _ = dc.GetTextExtent(line)
+            #dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * lineheight + 1)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * lineheight + 0)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * lineheight + 1)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * lineheight + 0)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * lineheight + 1)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * lineheight - 1)
+            dc.DrawText(line, (bmp.Size.width - linewidth) / 2 - 1, ystart + i * lineheight - 1)
+            #dc.DrawText(line, (bmp.Size.width - linewidth) / 2 + 1, ystart + i * lineheight)
+        dc.SetTextForeground(wx.WHITE) # @todo clear hack
+    for i, line in enumerate(text.split("\n")):
+        linewidth, _ = dc.GetTextExtent(line)
+        dc.DrawText(line, (bmp.Size.width - linewidth) / 2, ystart + i * lineheight)
+
+    dc.SetBrush(wx.Brush(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW), wx.SOLID))
+    dc.SetPen(wx.Pen(wx.SystemSettings.GetColour(wx.SYS_COLOUR_WINDOW)))
+    #dc.DrawRectangle(0, 41, bmp.Size.width, bmp.Size.height - 36)
     colour_text = wx.Colour(125, 125, 125) if supported else wx.RED
     dc.SetTextForeground(colour_text)
     dc.SetPen(wx.Pen(colour_text))
-    font = wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
+    font = wx.Font(7, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
                    wx.FONTWEIGHT_BOLD, face="Arial")
     dc.SetFont(font)
     rgb = "#%2X%2X%2X" % (factor[1], factor[2], factor[3])
-    dc.DrawText(rgb, 2, 36)
-    
+    #dc.DrawText(rgb, 2, 31)
+
+
+    dc.DrawRectangle(0, 44, bmp.Size.width, 3)
+    dc.SetBrush(wx.Brush(wx.WHITE, wx.SOLID))
+    dc.SetPen(wx.Pen(wx.WHITE))
+    dc.DrawRectangle(0, 44, bmp.Size.width * factor[0] / 255., 3)
+    dc.SetBrush(wx.GREY_BRUSH)
+    dc.SetPen(wx.GREY_PEN)
+    dc.DrawRectangle(bmp.Size.width * factor[0] / 255. - 1, 43, 3, 5)
+
+    MARKER_SIZE = 3, 7
+    LINE_WIDTH = 5
+    LINE_VPADDING = (1, 0) # Line width higher and lower padding
+    dc.SetBrush(wx.Brush(wx.Colour(49, 52, 49), wx.SOLID))
+    dc.SetPen(wx.Pen(wx.Colour(49, 52, 49)))
+    dc.DrawRectangle(0, bmp.Size.height - LINE_WIDTH - LINE_VPADDING[1], bmp.Size.width, LINE_WIDTH)
+    dc.SetBrush(wx.Brush(wx.WHITE, wx.SOLID))
+    dc.SetPen(wx.Pen(wx.WHITE))
+    dc.DrawRectangle(0, bmp.Size.height - LINE_WIDTH - LINE_VPADDING[1], bmp.Size.width * factor[0] / 255., LINE_WIDTH)
+    dc.SetBrush(wx.GREY_BRUSH)
+    dc.SetPen(wx.GREY_PEN)
+    dc.DrawRectangle(bmp.Size.width * factor[0] / 255. - LINE_VPADDING[0],
+                     bmp.Size.height - MARKER_SIZE[1], MARKER_SIZE[0], MARKER_SIZE[1])
+
+    if not supported:
+        dc.SetPen(wx.Pen(wx.RED))
+        dc.DrawLine(0, 0, bmp.Size.width, bmp.Size.height)
+        dc.DrawLine(0, bmp.Size.height, bmp.Size.width, 0)
     del dc
     return bmp
 

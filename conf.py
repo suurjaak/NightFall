@@ -45,7 +45,7 @@ FileDirectives = [
 ConfigFile = "%s.ini" % os.path.join(ApplicationDirectory, Title.lower())
 
 """Settings window size in pixels, (w, h)."""
-SettingsFrameSize = (415, 340)
+SettingsFrameSize = (400, 450)
 
 """Tooltip shown for the tray icon."""
 TrayTooltip = "NightFall (click to toggle options, right-click for menu)"
@@ -55,6 +55,8 @@ HomeUrl = "http://github.com/suurjaak/NightFall"
 
 """Saved factor list icon."""
 ListIcon = os.path.join(ResourceDirectory, "listicon.png")
+
+FactorIconSize = (100, 48)
 
 """Window icon."""
 SettingsFrameIcon = os.path.join(ResourceDirectory, "icon.png")
@@ -136,6 +138,9 @@ StoredFactors = [
     [26, 255, 212, 212], [127, 255, 255, 128], [77, 255, 255, 159],
     [77, 159, 255, 159], [83, 159, 236, 159], [82, 255, 189, 189]
 ]
+StoredFactorsNew = {
+    "name": [0, 0, 0, 0],
+}
 
 """The dimming schedule, [1,0,..] per each minute."""
 Schedule = []
