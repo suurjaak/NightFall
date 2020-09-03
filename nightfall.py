@@ -584,7 +584,9 @@ class NightFall(wx.App):
 
     def on_activate_settings(self, event):
         """Handler for activating/deactivating window, hides it if focus lost."""
-        if not self.frame or self.frame_has_modal: return
+        if not self.frame or self.frame_has_modal \
+        or not self.trayicon.IsAvailable(): return
+
         if self.frame.Shown \
         and not (event.Active or self.frame_hider or self.frame_shower):
             millis = conf.SettingsFrameTimeout
@@ -670,6 +672,10 @@ class NightFall(wx.App):
     def on_toggle_settings(self, event=None):
         """Handler for clicking to toggle settings window visible/hidden."""
         if self.frame_has_modal: return
+
+        if not self.trayicon.IsAvailable():
+            self.frame.Iconize(not self.frame.IsIconized())
+            return
 
         if self.frame_hider: # Window is sliding closed
             self.frame_hider.Stop()
