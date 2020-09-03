@@ -1,39 +1,49 @@
 NightFall
 =========
 
-A small tray program for making screen colours darker and softer during
-late hours. Confirmed to work under Windows, *might* work under Linux/OSX.
+A small tray program that can change screen brightness and colour gamma settings
+on schedule, in order to achieve a more natural feeling during late hours.
 
-Windows binaries at https://suurjaak.github.io/NightFall.
+Looking at a lit screen in a dark room can interfere with the sleep cycle,
+NightFall provides a warm-coloured darker screen on desktop and laptop 
+computers alike.
+
+Comes with a number of pre-defined brightness and colour themes, you can
+also create and save your own themes.
+
+[![Screenshots](https://raw.github.com/suurjaak/NightFall/gh-pages/img/th_collage.png)](https://raw.github.com/suurjaak/NightFall/gh-pages/img/collage.png)
+
+Windows binaries and more screenshots at https://suurjaak.github.io/NightFall.
 
 
 Using The Program
 -----------------
 
-Run "python nightfall.py", or launch the precompiled Windows executable.
-It will stay in the system tray as a grey or orange moon icon, depending on
-being active, and will dim the screen on command or according to hours
-scheduled in settings.
+NightFall stays in the system tray as a grey or orange moon icon, depending on
+being active, dimming the screen on command or according to the set schedule.
+
+Works under Windows, *might* work under Linux/OSX.
+
+Run `python nightfall.py` if using the source distribution.
 
 
 Dependencies
 ------------
 
-If running as a Python script, NightFall requires Python 2.7 and wx.Python
-4.0+ (http://wxpython.org)
+If running as a Python script, NightFall requires Python 2.7 and wxPython
+4.0+ (https://wxpython.org)
 
 
 Attribution
 -----------
 
 NightFall includes bits of code in gamma.py from PsychoPy 1.75
-(http://www.psychopy.org/epydoc/psychopy.gamma-pysrc.html), released under the
-compatible GNU General Public License v3; and from Windows Routines 2.2.1 by
-Jason R. Coombs,
-(http://pydoc.net/jaraco.windows/2.2.1/jaraco.windows.error), released under
-the MIT License.
+(https://github.com/psychopy/psychopy), released under the
+compatible GNU General Public License v3; 
+and from Windows Routines 2.2.1 by Jason R. Coombs,
+(https://github.com/jaraco/jaraco.windows), released under the MIT License.
 
-Windows binaries built with PyInstaller (http://www.pyinstaller.org).
+Windows binaries built with PyInstaller (https://www.pyinstaller.org).
 
 
 License

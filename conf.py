@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "1.3.dev1"
+Version = "2.0.dev0"
 
 VersionDate = "03.09.2020"
 
@@ -55,7 +55,7 @@ ConfigFile = "%s.ini" % os.path.join(ApplicationDirectory, Title.lower())
 SettingsFrameSize = (400, 380)
 
 """Tooltip shown for the tray icon."""
-TrayTooltip = "NightFall (double-click to toggle dimming, right-click for menu)"
+TrayTooltip = "NightFall (double-click to toggle dimming)"
 
 """URL to program homepage."""
 HomeUrl = "https://github.com/suurjaak/NightFall"
@@ -174,19 +174,32 @@ InfoDetailedText = (
 """Information text shown on about page."""
 AboutText = """
 <font face="Tahoma" size=2 color="%%(textcolour)s">
+  <p>
   NightFall can change screen colour gamma and brightness settings, 
-  intended for dimming the screen for a more natural feeling during late hours.
-  <br /><br />
+  in order to achieve a more natural feeling during late hours.
+  </p>
 
+  <p>
   Released as free open source software under the MIT License.<br />
-  Copyright &copy; 2012, Erki Suurjaak<br /><br />
+  Copyright &copy; 2012, Erki Suurjaak
+  </p>
 
-  NightFall has been built using the following open source software:<br />
+  <p>
+  NightFall has been built using the following open source software:
   <ul>
     <li>Python, <a href="https://www.python.org"><font color="%%(linkcolour)s">python.org</font></a></li>
     <li>wxPython, <a href="https://wxpython.org"><font color="%%(linkcolour)s">wxpython.org</font></a></li>
     %(pyinstaller)s
-  </ul><br /><br />
+  </ul>
+  </p>
+
+  <p>
+  NightFall includes code from:
+  <ul>
+    <li>PsychoPy, <a href="https://github.com/psychopy/psychopy"><font color="%%(linkcolour)s">github.com/psychopy/psychopy</font></a></li>
+    <li>jaraco.windows, <a href="https://github.com/jaraco/jaraco.windows"><font color="%%(linkcolour)s">github.com/jaraco/jaraco.windows</font></a></li>
+  </ul>
+  </p>
 
 </font>
 """ % {"pyinstaller": '<li>PyInstaller, <a href="https://www.pyinstaller.org">'
