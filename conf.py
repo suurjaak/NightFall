@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    30.08.2020
+@modified    03.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,17 +17,16 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "1.3.dev0"
+Version = "1.3.dev1"
 
-VersionDate = "30.08.2020"
+VersionDate = "03.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
     ApplicationDirectory = os.path.dirname(sys.executable) # likely relative
     ApplicationPath = os.path.abspath(sys.executable)
     ShortcutIconPath = ApplicationPath
-    ResourceDirectory = os.path.join(os.environ.get("_MEIPASS2", sys._MEIPASS),
-                                     "res")
+    ResourceDirectory = os.path.join(getattr(sys, "_MEIPASS", ""), "res")
 else:
     ApplicationDirectory = os.path.dirname(__file__) # likely relative
     FullDirectory = os.path.dirname(os.path.abspath(__file__))
@@ -38,28 +37,43 @@ else:
 """List of attribute names that can be saved to and loaded from ConfigFile."""
 FileDirectives = [
     "DimmingEnabled", "ScheduleEnabled", "DimmingFactor", "Schedule",
-    "StoredFactors"
+    "StoredFactors",
 ]
+"""List of user-modifiable attributes, saved if changed from default."""
+OptionalFileDirectives = [
+    "FactorIconSize", "FadeSteps", "SettingsFrameTimeout", "SettingsFrameSize",
+    "SettingsFrameSlideInEnabled", "SettingsFrameSlideOutEnabled",
+    "SettingsFrameSlideInStep", "SettingsFrameSlideOutStep",
+    "SettingsFrameSlideDelay",
+]
+Defaults = {}
 
 """Name of file where FileDirectives are kept."""
 ConfigFile = "%s.ini" % os.path.join(ApplicationDirectory, Title.lower())
 
 """Settings window size in pixels, (w, h)."""
-SettingsFrameSize = (400, 450)
+SettingsFrameSize = (400, 380)
 
 """Tooltip shown for the tray icon."""
-TrayTooltip = "NightFall (click to toggle options, right-click for menu)"
+TrayTooltip = "NightFall (double-click to toggle dimming, right-click for menu)"
 
 """URL to program homepage."""
-HomeUrl = "http://github.com/suurjaak/NightFall"
+HomeUrl = "https://github.com/suurjaak/NightFall"
 
 """Saved factor list icon."""
 ListIcon = os.path.join(ResourceDirectory, "listicon.png")
 
-FactorIconSize = (100, 48)
+"""Clock central icon."""
+ClockIcon = os.path.join(ResourceDirectory, "icon_48x48.png")
+
+FactorIconSize = (80, 48)
 
 """Window icon."""
 SettingsFrameIcon = os.path.join(ResourceDirectory, "icon.png")
+
+"""Icons for gamma component labels under expert settings."""
+ComponentIcons = {x: os.path.join(ResourceDirectory, "%s.png" % x)
+                  for x in ["brightness", "red", "green", "blue"]}
 
 """Number of milliseconds before settings window is hidden on losing focus."""
 SettingsFrameTimeout = 30000
@@ -90,20 +104,17 @@ TrayIconOn = os.path.join(ResourceDirectory, "tray_on.png")
 TrayIconOff = os.path.join(ResourceDirectory, "tray_off.png")
 
 """Tray icon when dimming and schedule is on."""
-TrayIconOnScheduled = \
-    os.path.join(ResourceDirectory, "tray_on_scheduled.png")
+TrayIconOnScheduled = os.path.join(ResourceDirectory, "tray_on_scheduled.png")
 
 """Tray icon when dimming is off and schedule is on."""
-TrayIconOffScheduled = \
-    os.path.join(ResourceDirectory, "tray_off_scheduled.png")
+TrayIconOffScheduled = os.path.join(ResourceDirectory, "tray_off_scheduled.png")
 
 """List of all tray icons by state, [dimming now|schedule enabled]."""
-TrayIcons = \
-    [TrayIconOff, TrayIconOffScheduled, TrayIconOn, TrayIconOnScheduled]
+TrayIcons = [TrayIconOff, TrayIconOffScheduled, TrayIconOn, TrayIconOnScheduled]
 
 """
 Valid range for gamma coefficients, as (min, max). Lower coefficients cause the
-system calls to fail for some reason.
+system calls to fail for unknown reason.
 """
 ValidColourRange = (59, 255)
 
@@ -117,30 +128,32 @@ ScheduleEnabled = False
 StartupEnabled = False
 
 """
-Screen dimming factor, as a list of 4 integers, standing for brightness and 3
-RGB channels, ranging from 0..255 (brightness at 128 is 100%, lower is darker).
+Screen dimming factor, as a list of 4 integers, standing for 3 RGB channels
+and brightness, ranging from 0..255 (brightness at 128 is 100%, lower is darker).
 """
-DimmingFactor = [82, 255, 189, 189]
+DimmingFactor = [255, 189, 189, 82]
 
 """Default gamma coefficients for dimmed display."""
-DefaultDimmingFactor = [82, 255, 189, 189]
+DefaultDimmingFactor = [255, 189, 189, 82]
 
 """Gamma coefficients for normal display."""
-NormalDimmingFactor = [128, 255, 255, 255]
+NormalDimmingFactor = [255, 255, 255, 128]
 
 """Screen brightness for normal display."""
 NormalBrightness = 128
 
-"""Pre-stored dimming factors."""
-StoredFactors = [
-    [57, 255, 179, 179], [57, 255, 211, 176], [128, 255, 128, 128],
-    [128, 128, 128, 255], [88, 168, 168, 255], [0, 255, 255, 255],
-    [26, 255, 212, 212], [127, 255, 255, 128], [77, 255, 255, 159],
-    [77, 159, 255, 159], [83, 159, 236, 159], [82, 255, 189, 189]
-]
-StoredFactorsNew = {
-    "name": [0, 0, 0, 0],
+"""Pre-stored dimming factors, as {name: [r, g, b, brightness]}."""
+StoredFactors = {
+    "alpenglow":   [255, 211, 176,  57],
+    "dawn":        [255, 189, 189,  82],
+    "gloom":       [255, 255, 255,   0],
+    "golden hour": [255, 255, 159,  77],
+    "green visor": [159, 255, 159,  77],
+    "no sleep":    [128, 128, 255, 128],
+    "twilight":    [255, 179, 179,  57],
+    "fireside":    [255, 128, 128, 128],
 }
+DefaultStoredFactors = StoredFactors.copy()
 
 """The dimming schedule, [1,0,..] per each minute."""
 Schedule = []
@@ -151,55 +164,67 @@ The default dimming schedule, [1,0,..] per each quarter hour
 """
 DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
 
-"""Information text shown on configuration page."""
-InfoText = "%(name)s can dim screen colors for a more natural feeling" \
-    " during late hours.\nDimming can be scheduled in detail, or activated " \
-    "manually at any time." % {"name": Title}
-
 """Information text shown on expert settings page."""
-InfoDetailedText = "Fine-tune the individual factors that make up the " \
-                   "display: brightness \n(ranges from dark to superbright) " \
-                   "and red-green-blue colour channels.\n\n" \
-                   "A lot of the darker ranges will not be accepted by" \
-                   " the graphics hardware."
+InfoDetailedText = (
+    "Fine-tune the individual factors that make up the display: brightness \n"
+    "(ranges from dark to superbright) and red-green-blue colour channels.\n\n"
+    "A lot of the darker ranges will not be accepted by the graphics hardware."
+)
 
+"""Information text shown on about page."""
+AboutText = """
+<font face="Tahoma" size=2 color="%%(textcolour)s">
+  NightFall can change screen colour gamma and brightness settings, 
+  intended for dimming the screen for a more natural feeling during late hours.
+  <br /><br />
 
+  Released as free open source software under the MIT License.<br />
+  Copyright &copy; 2012, Erki Suurjaak<br /><br />
+
+  NightFall has been built using the following open source software:<br />
+  <ul>
+    <li>Python, <a href="https://www.python.org"><font color="%%(linkcolour)s">python.org</font></a></li>
+    <li>wxPython, <a href="https://wxpython.org"><font color="%%(linkcolour)s">wxpython.org</font></a></li>
+    %(pyinstaller)s
+  </ul><br /><br />
+
+</font>
+""" % {"pyinstaller": '<li>PyInstaller, <a href="https://www.pyinstaller.org">'
+                      '<font color="%(linkcolour)s">pyinstaller.org</font></a></li>'
+                      if getattr(sys, 'frozen', False) else ""}
 
 """Error text shown if applying a factor failed."""
 FactorFailedText = "Selected combo is invalid"
 
+
 def load():
     """Loads FileDirectives from ConfigFile into this module's attributes."""
+    global Defaults
+
     section = "*"
     module = sys.modules[__name__]
+    Defaults.update({k: getattr(module, k) for k in OptionalFileDirectives
+                     if hasattr(module, k)}) if not Defaults else None
+
     parser = RawConfigParser()
     parser.optionxform = str # Force case-sensitivity on names
     try:
         parser.read(ConfigFile)
-        for name in FileDirectives:
-            try: # parser.get can throw an error if not found
+
+        def parse_value(name):
+            try: # parser.get can throw an error if value not found
                 value_raw = parser.get(section, name)
-                success = False
-                # First, try to interpret as JSON
-                try:
-                    value = json.loads(value_raw)
-                    success = True
-                except:
-                    pass
-                if not success:
-                    # JSON failed, try to eval it
-                    try:
-                        value = eval(value_raw)
-                        success = True
-                    except:
-                        # JSON and eval failed, fall back to string
-                        value = value_raw
-                        success = True
-                if success:
-                    setattr(module, name, value)
-            except:
-                pass
-    except Exception, e:
+            except Exception:
+                return None, False
+            try: # Try to interpret as JSON, fall back on raw string
+                value = json.loads(value_raw)
+            except ValueError:
+                value = value_raw
+            return value, True
+
+        for name in FileDirectives + OptionalFileDirectives:
+            [setattr(module, name, v) for v, s in [parse_value(name)] if s]
+    except Exception:
         pass # Fail silently
 
 
@@ -212,16 +237,19 @@ def save():
     parser.add_section(section)
     try:
         f = open(ConfigFile, "wb")
-        f.write("# %s configuration autowritten on %s.\n" % (
-            ConfigFile, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-        )
+
+        f.write("# %s %s configuration written on %s.\n" % (Title, Version,
+                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         for name in FileDirectives:
+            try: parser.set(section, name, json.dumps(getattr(module, name)))
+            except Exception: pass
+        for name in OptionalFileDirectives:
             try:
-                value = getattr(module, name)
-                parser.set(section, name, json.dumps(value))
-            except:
-                pass
+                value = getattr(module, name, None)
+                if Defaults.get(name) != value:
+                    parser.set(section, name, json.dumps(value))
+            except Exception: pass
         parser.write(f)
         f.close()
-    except Exception, e:
+    except Exception:
         pass # Fail silently

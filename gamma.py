@@ -8,7 +8,7 @@ released under compatible open source licences.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    27.01.2013
+@modified    03.09.2020
 """
 import ctypes
 import ctypes.util
@@ -28,8 +28,8 @@ def set_screen_factor(factor):
     """
     Changes the brightness and color gamma of the screen.
 
-    @param   factor       a 4-byte list, with first being brightness and last 3
-                          being RGB values (0..255). Brightness is regular at
+    @param   factor       a 4-byte list, with first 3 being RGB values (0..255)
+                          and last being brightness. Brightness is regular at
                           128 and brighter than normal if above 128.
     @return               True on success, False on failure
     """
@@ -52,15 +52,12 @@ def set_screen_factor(factor):
           IllegalRegion < -0.5093+LUTEntry*0.39
     """
     for i in range(256):
-        val = min(i * (factor[0] + 128), 65535)
-        [ramp[j].append(int(val * factor[j + 1] / 255.)) for j in range(3)]
+        val = min(i * (factor[-1] + 128), 65535)
+        [ramp[j].append(int(val * factor[j] / 255.)) for j in range(3)]
 
-    try:
-        set_gamma_ramp(ramp)
-        result = True
-    except Exception, e:
-        result = False
-
+    result = True
+    try: set_gamma_ramp(ramp)
+    except Exception: result = False
     return result
 
 
@@ -108,18 +105,18 @@ def set_gamma_ramp(ramp):
             code = ctypes.windll.kernel32.GetLastError()
             errormsg = format_windows_system_message(code).strip()
             msg = "SetDeviceGammaRamp failed: %s [error %s]" % (errormsg, code)
-            raise Exception, msg
+            raise Exception(msg)
     elif "darwin" == sys.platform:
         error = carbon.CGSetDisplayTransferByTable(device, len(ramp_c[0]),
                    ramp_c[0], ramp_c[1], ramp_c[2])
         if error:
             msg = "CGSetDisplayTransferByTable failed [error %s]" % error
-            raise Exception, msg
+            raise Exception(msg)
     elif sys.platform.startswith("linux"):
         success = xf86vm.XF86VidModeSetGammaRamp(device, 0, len(ramp_c[0]),
                     ramp_c[0], ramp_c[1], ramp_c[2])
         if not success:
-            raise Exception, "XF86VidModeSetGammaRamp failed"
+            raise Exception("XF86VidModeSetGammaRamp failed")
 
 
 def get_gamma_ramp():
@@ -141,18 +138,18 @@ def get_gamma_ramp():
             code = ctypes.windll.kernel32.GetLastError()
             errormsg = format_windows_system_message(code).strip()
             msg = "GetDeviceGammaRamp failed: %s [error %s]" % (errormsg, code)
-            raise Exception, msg
+            raise Exception(msg)
     elif "darwin" == sys.platform:
         error = carbon.CGGetDisplayTransferByTable(device, len(ramp_c[0]),
                      ramp_c[0], ramp_c[1], ramp_c[2], (ctypes.c_int * 1)())
         if error:
             msg = "CGGetDisplayTransferByTable failed [error %s]" % error
-            raise Exception, msg
+            raise Exception(msg)
     elif sys.platform.startswith("linux"):
         success = xf86vm.XF86VidModeGetGammaRamp(device, 0, len(ramp_c[0]),
                       ramp_c[0], ramp_c[1], ramp_c[2])
         if not success:
-            raise Exception, "XF86VidModeGetGammaRamp failed"
+            raise Exception("XF86VidModeGetGammaRamp failed")
 
     ramp = [ramp_c[0][:], ramp_c[1][:], ramp_c[2][:]]
     return ramp
@@ -183,7 +180,7 @@ def format_windows_system_message(errno):
     bytes = ctypes.windll.kernel32.FormatMessageW(flags, source, message_id,
         language_id, ctypes.byref(result_buffer), buffer_size, arguments,
     )
-    # note the following will cause an infinite loop if GetLastError
+    # Note the following will cause an infinite loop if GetLastError
     # repeatedly returns an error that cannot be formatted, although
     # this should not happen.
     if bytes == 0:

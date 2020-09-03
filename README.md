@@ -1,10 +1,10 @@
 NightFall
-===========
+=========
 
 A small tray program for making screen colours darker and softer during
-late hours. Currently works under Windows, *might* work under Linux/OSX.
+late hours. Confirmed to work under Windows, *might* work under Linux/OSX.
 
-Windows binaries at http://suurjaak.github.com/NightFall.
+Windows binaries at https://suurjaak.github.io/NightFall.
 
 
 Using The Program
@@ -19,8 +19,8 @@ scheduled in settings.
 Dependencies
 ------------
 
-If running as a Python script, NightFall requires Python 2.6+ and wx.Python
-2.8+ (http://wxpython.org/)
+If running as a Python script, NightFall requires Python 2.7 and wx.Python
+4.0+ (http://wxpython.org)
 
 
 Attribution
@@ -33,30 +33,12 @@ Jason R. Coombs,
 (http://pydoc.net/jaraco.windows/2.2.1/jaraco.windows.error), released under
 the MIT License.
 
-Windows binaries built with PyInstaller 2.0 (http://www.pyinstaller.org/).
+Windows binaries built with PyInstaller (http://www.pyinstaller.org).
 
 
 License
 -------
 
-(The MIT License)
-
-Copyright (C) 2012 by Erki Suurjaak
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+Copyright (c) 2012 by Erki Suurjaak.
+Released as free open source software under the MIT License,
+see [LICENSE.md](LICENSE.md) for full license text.
