@@ -343,6 +343,9 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_COMBOBOX,   self.on_change_factor_combo, frame.combo_factors)
         frame.link_www.Bind(wx.html.EVT_HTML_LINK_CLICKED,
                             lambda e: webbrowser.open(e.GetLinkInfo().Href))
+        frame.label_about.Bind(wx.html.EVT_HTML_LINK_CLICKED,
+                            lambda e: webbrowser.open(e.GetLinkInfo().Href))
+
         frame.Bind(EVT_TIME_SELECTOR, self.on_change_schedule)
         frame.Bind(wx.EVT_CLOSE,      self.on_toggle_settings)
         frame.Bind(wx.EVT_ACTIVATE,   self.on_activate_settings)

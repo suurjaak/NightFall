@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev2"
+Version = "2.0.dev3"
 
 VersionDate = "03.09.2020"
 
