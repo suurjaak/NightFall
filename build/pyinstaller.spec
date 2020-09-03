@@ -1,35 +1,56 @@
 # -*- mode: python -*-
-# Spec file for pyinstaller.
-# To get this spec, run python Setup.py <specfile> in pyinstaller\ directory.
-# Copy to pyinstaller\gui and in pyinstaller\ run python Build.py
+"""
+Pyinstaller spec file for Skyperious, produces a 32-bit or 64-bit executable,
+depending on current environment.
+
+@created   18.10.2012
+@modified  03.09.2020
+"""
 import os
-import platform
+import struct
 import sys
-sys.path.append("")
+
+os.chdir("..")
+ROOTPATH  = APPPATH = os.getcwd()
+sys.path.append(APPPATH)
 
 import conf
 
-a = Analysis([("nightfall.py")],)
+
+DO_DEBUG_VERSION = False
+DO_WINDOWS = ("nt" == os.name)
+
+def do_64bit(): return (struct.calcsize("P") * 8 == 64)
+
+
+app_file = "nightfall_%s%s" % (conf.Version, "_x64" if do_64bit() else "")
+entrypoint = os.path.join(ROOTPATH, "nightfall.py")
+if DO_WINDOWS:
+    app_file += ".exe"
+
+
+a = Analysis(
+    ["nightfall.py"],
+    excludes=["FixTk", "numpy", "tcl", "tk", "_tkinter", "tkinter", "Tkinter"],
+)
 # Add all image resources used by the script
-for i in ["icon.png", "icons.ico", "listicon.png", "tray_off.png",
-          "tray_on.png", "tray_off_scheduled.png", "tray_on_scheduled.png"]:
+for i in ["blue.png", "brightness.png", "green.png", "icon.png", "icon_48x48.png",
+          "icons.ico", "listicon.png", "red.png", "tray_off.png",
+          "tray_off_scheduled.png", "tray_on.png", "tray_on_scheduled.png"]:
 	a.datas.append((os.path.join("res", i), os.path.join("res", i), "DATA"))
 
 pyz = PYZ(a.pure)
 
-exename = "nightfall_%s.exe" % conf.Version
-if "64" in platform.architecture()[0]:
-    exename = "nightfall_%s_x64.exe" % conf.Version
 exe = EXE(
     pyz,
-    a.scripts,
+    a.scripts + ([("v", "", "OPTION")] if DO_DEBUG_VERSION else []),
     a.binaries,
     a.zipfiles,
     a.datas,
-    name=os.path.join("dist", exename),
-    debug=False,  # Verbose or non-verbose 
+    name=os.path.join("dist", app_file),
+    debug=DO_DEBUG_VERSION, # Verbose or non-verbose debug statements printed
     strip=False,  # EXE and all shared libraries run through cygwin's strip, tends to render Win32 DLLs unusable
     upx=True,     # Using Ultimate Packer for eXecutables
-    icon=os.path.join("res", "icons.ico"),
+    icon=os.path.join(ROOTPATH, "res", "icons.ico"),
     console=False # Use the Windows subsystem executable instead of the console one
 )
