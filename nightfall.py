@@ -311,6 +311,7 @@ class NightFall(wx.App):
     and communication with the dimmer model.
     """
 
+
     def __init__(self, redirect=False, filename=None,
                  useBestVisual=False, clearSigInt=True):
         wx.App.__init__(self, redirect, filename, useBestVisual, clearSigInt)
@@ -323,6 +324,7 @@ class NightFall(wx.App):
         self.frame_unmoved  = True
         self.frame_move_ignore = False # Ignore EVT_MOVE on showing window
         self.frame_has_modal   = False # Whether a modal dialog is open
+        self.dt_tray_click     = None  # Last click timestamp, for double-click
 
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
         frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
@@ -359,6 +361,7 @@ class NightFall(wx.App):
         trayicon = self.trayicon = wx.adv.TaskBarIcon()
         self.set_tray_icon(self.TRAYICONS[False][False])
         trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.on_toggle_dimming_tray)
+        trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DOWN,   self.on_lclick_tray)
         trayicon.Bind(wx.adv.EVT_TASKBAR_RIGHT_DOWN,  self.on_open_tray_menu)
 
         self.dimmer.start()
@@ -439,7 +442,7 @@ class NightFall(wx.App):
         self.frame.button_saved_delete.Enabled = (selected >= 0)
 
 
-    def on_stored_factor(self, event):
+    def on_stored_factor(self, event=None):
         """Applies the selected stored dimming factor."""
         selected = self.frame.list_factors.GetSelection()
         if selected >= 0:
@@ -451,7 +454,7 @@ class NightFall(wx.App):
             self.dimmer.set_factor(factor, "THEME APPLIED")
 
 
-    def on_save_factor(self, event):
+    def on_save_factor(self, event=None):
         """Stores the currently set rgb+brightness values."""
         factor = conf.DimmingFactor
         name = next((k for k, v in conf.StoredFactors.items()
@@ -487,7 +490,7 @@ class NightFall(wx.App):
         conf.save()
 
 
-    def on_delete_factor(self, event):
+    def on_delete_factor(self, event=None):
         """Deletes the stored factor, if confirmed."""
         selected = self.frame.list_factors.GetSelection()
         if selected < 0: return
@@ -521,7 +524,7 @@ class NightFall(wx.App):
             if lidx >= 0: self.frame.list_factors.SetSelection(lidx)
 
 
-    def on_open_tray_menu(self, event):
+    def on_open_tray_menu(self, event=None):
         """Creates and opens a popup menu for the tray icon."""
         menu = wx.Menu()
 
@@ -534,11 +537,14 @@ class NightFall(wx.App):
 
 
         is_dimming = self.dimmer.should_dim()
-        text = "&Turn " + ("current dimming off" if self.dimmer.should_dim()
-                          else "dimming on")
-        item = menu.Append(-1, text, kind=wx.ITEM_CHECK)
+        text = "&Turn " + ("current dimming off" if self.dimmer.should_dim() else
+                           "dimming on")
+        item = wx.MenuItem(menu, -1, text, kind=wx.ITEM_CHECK)
+        item.Font = self.frame.Font.Bold()
+        menu.Append(item)
         item.Check(is_dimming)
         menu.Bind(wx.EVT_MENU, self.on_toggle_dimming_tray, id=item.GetId())
+
         item = menu.Append(-1, "Apply on &schedule", kind=wx.ITEM_CHECK)
         item.Check(conf.ScheduleEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
@@ -566,12 +572,12 @@ class NightFall(wx.App):
         self.trayicon.PopupMenu(menu)
 
 
-    def on_change_schedule(self, event):
+    def on_change_schedule(self, event=None):
         """Handler for changing the time schedule in settings window."""
         self.dimmer.set_schedule(self.frame.selector_time.GetSelections())
 
 
-    def on_toggle_startup(self, event):
+    def on_toggle_startup(self, event=None):
         """Handler for toggling the auto-load in settings window on/off."""
         self.dimmer.toggle_startup(not conf.StartupEnabled)
 
@@ -636,7 +642,7 @@ class NightFall(wx.App):
             self.frame.Raise()
 
 
-    def on_exit(self, event):
+    def on_exit(self, event=None):
         """Handler for exiting the program, stops the dimmer and cleans up."""
         self.dimmer.stop()
         self.trayicon.RemoveIcon()
@@ -654,14 +660,14 @@ class NightFall(wx.App):
             self.frame_console.Show(not self.frame_console.Shown)
 
 
-    def on_move(self, event):
+    def on_move(self, event=None):
         """Handler for moving the window, clears window auto-positioning."""
         if self.frame_pos_orig is None and self.frame_move_ignore:
             self.frame_unmoved = False
         self.frame_move_ignore = False
 
 
-    def on_toggle_settings(self, event):
+    def on_toggle_settings(self, event=None):
         """Handler for clicking to toggle settings window visible/hidden."""
         if self.frame_has_modal: return
 
@@ -724,11 +730,12 @@ class NightFall(wx.App):
         self.dimmer.toggle_dimming(event.IsChecked())
 
 
-    def on_toggle_dimming_tray(self, event):
+    def on_toggle_dimming_tray(self, event=None):
         """
         Handler for toggling dimming on/off from the tray, can affect either
         schedule or global flag.
         """
+        self.dt_tray_click = None
         do_dim = event.IsChecked() if isinstance(event, wx.CommandEvent) \
                  else not self.dimmer.should_dim()
         if not do_dim and self.dimmer.should_dim_scheduled():
@@ -739,6 +746,22 @@ class NightFall(wx.App):
     def on_toggle_schedule(self, event):
         """Handler for toggling schedule on/off."""
         self.dimmer.toggle_schedule(event.IsChecked())
+
+
+    def on_lclick_tray(self, event):
+        """
+        Handler for left-clicking the tray icon, waits to see if user
+        is double-clicking, otherwise toggles the settings window.        
+        """
+        if self.dt_tray_click: return
+
+        def after():
+            if not self or not self.dt_tray_click: return
+            self.dt_tray_click = None
+            self.on_toggle_settings()
+            
+        self.dt_tray_click = datetime.datetime.utcnow()
+        wx.CallLater(wx.SystemSettings.GetMetric(wx.SYS_DCLICK_MSEC) + 1, after)
 
 
     def on_sys_colour_change(self, event):
@@ -903,7 +926,7 @@ class NightFall(wx.App):
         panel_expert.Sizer.Add(sizer_bar, proportion=1, flag=wx.GROW)
 
         # Create About-page
-        label_about = frame.label_about = wx.html.HtmlWindow(panel_about)
+        label_about = frame.label_about = wx.html.HtmlWindow(panel_about, style=wx.html.HW_SCROLLBAR_NEVER)
         args = {"textcolour": ColourManager.ColourHex(wx.SYS_COLOUR_BTNTEXT),
                 "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT)}
         label_about.SetPage(conf.AboutText % args)
@@ -963,6 +986,7 @@ class NightFall(wx.App):
         icons.AddIcon(wx.Icon(wx.Bitmap((conf.SettingsFrameIcon))))
         frame.SetIcons(icons)
         frame.ToggleWindowStyle(wx.STAY_ON_TOP)
+        panel_config.SetFocus()
         return frame
 
 
