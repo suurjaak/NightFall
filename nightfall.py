@@ -47,7 +47,6 @@ class Dimmer(object):
 
     def __init__(self, event_handler):
         self.handler = event_handler
-        self.service = StartupService()
 
         conf.load()
         self.check_conf()
@@ -94,7 +93,7 @@ class Dimmer(object):
         for i, g in enumerate(conf.Schedule):
             if g not in [0, 1]:
                 conf.Schedule[i] = conf.DefaultSchedule[i]
-        conf.StartupEnabled = self.service.is_started()
+        conf.StartupEnabled = StartupService.is_started()
 
 
     def start(self):
@@ -104,7 +103,7 @@ class Dimmer(object):
         self.post_event("SCHEDULE TOGGLED", conf.ScheduleEnabled)
         self.post_event("SCHEDULE CHANGED", conf.Schedule)
         self.post_event("STARTUP TOGGLED",  conf.StartupEnabled)
-        self.post_event("STARTUP POSSIBLE", self.service.can_start())
+        self.post_event("STARTUP POSSIBLE", StartupService.can_start())
         if self.should_dim():
             self.apply_theme(conf.CurrentTheme, fade=True)
             msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() else \
@@ -177,9 +176,9 @@ class Dimmer(object):
 
     def toggle_startup(self, enabled):
         """Toggles running NightFall on system startup."""
-        if self.service.can_start():
+        if StartupService.can_start():
             conf.StartupEnabled = enabled
-            self.service.start() if enabled else self.service.stop()
+            StartupService.start() if enabled else StartupService.stop()
             conf.save()
             self.post_event("STARTUP TOGGLED", conf.StartupEnabled)
 
@@ -1486,31 +1485,37 @@ class StartupService(object):
     supports only Windows.
     """
 
-    def can_start(self):
+    @classmethod
+    def can_start(cls):
         """Whether startup can be set on this system at all."""
         return ("win32" == sys.platform)
 
-    def is_started(self):
-        """Whether program has been started."""
-        return os.path.exists(self.get_shortcut_path_windows())
+    @classmethod
+    def is_started(cls):
+        """Whether program is in startup."""
+        return os.path.exists(cls.get_shortcut_path_windows())
 
-    def start(self):
+    @classmethod
+    def start(cls):
         """Sets program to run at system startup."""
-        shortcut_path = self.get_shortcut_path_windows()
+        shortcut_path = cls.get_shortcut_path_windows()
         target_path = conf.ApplicationPath
         workdir, icon = conf.ApplicationDirectory, conf.ShortcutIconPath
-        self.create_shortcut_windows(shortcut_path, target_path, workdir, icon)
+        cls.create_shortcut_windows(shortcut_path, target_path, workdir, icon)
 
-    def stop(self):
+    @classmethod
+    def stop(cls):
         """Stops program from running at system startup."""
-        try: os.unlink(self.get_shortcut_path_windows())
+        try: os.unlink(cls.get_shortcut_path_windows())
         except Exception: pass
 
-    def get_shortcut_path_windows(self):
+    @classmethod
+    def get_shortcut_path_windows(cls):
         path = "~\\Start Menu\\Programs\\Startup\\%s.lnk" % conf.Title
         return os.path.expanduser(path)
 
-    def create_shortcut_windows(self, path, target="", workdir="", icon=""):
+    @classmethod
+    def create_shortcut_windows(cls, path, target="", workdir="", icon=""):
         if "url" == path[-3:].lower():
             with open(path, "w") as shortcut:
                 shortcut.write("[InternetShortcut]\nURL=%s" % target)
