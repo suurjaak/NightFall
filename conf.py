@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    03.09.2020
+@modified    04.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev5"
+Version = "2.0.dev6"
 
-VersionDate = "03.09.2020"
+VersionDate = "04.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -41,10 +41,10 @@ FileDirectives = [
 ]
 """List of user-modifiable attributes, saved if changed from default."""
 OptionalFileDirectives = [
-    "FactorIconSize", "FadeSteps", "SettingsFrameTimeout", "SettingsFrameSize",
-    "SettingsFrameSlideInEnabled", "SettingsFrameSlideOutEnabled",
-    "SettingsFrameSlideInStep", "SettingsFrameSlideOutStep",
-    "SettingsFrameSlideDelay", "UnsavedDimmingFactor",
+    "FactorIconSize", "FadeSteps", "WindowTimeout", "WindowSize",
+    "WindowSlideInEnabled", "WindowSlideOutEnabled",
+    "WindowSlideInStep", "WindowSlideOutStep",
+    "WindowSlideDelay", "UnsavedDimmingFactor",
 ]
 Defaults = {}
 
@@ -52,7 +52,7 @@ Defaults = {}
 ConfigFile = "%s.ini" % os.path.join(ApplicationDirectory, Title.lower())
 
 """Settings window size in pixels, (w, h)."""
-SettingsFrameSize = (400, 380)
+WindowSize = (400, 380)
 
 """Tooltip shown for the tray icon."""
 TrayTooltip = "NightFall (double-click to toggle dimming)"
@@ -69,24 +69,24 @@ ClockIcon = os.path.join(ResourceDirectory, "icon_48x48.png")
 FactorIconSize = (80, 48)
 
 """Window icon."""
-SettingsFrameIcon = os.path.join(ResourceDirectory, "icon.png")
+WindowIcon = os.path.join(ResourceDirectory, "icon.png")
 
 """Icons for gamma component labels in theme editor."""
 ComponentIcons = {x: os.path.join(ResourceDirectory, "%s.png" % x)
                   for x in ["brightness", "red", "green", "blue"]}
 
 """Number of milliseconds before settings window is hidden on losing focus."""
-SettingsFrameTimeout = 30000
+WindowTimeout = 30000
 
-"""Whether sliding the settings frame in/out of view is enabled."""
-SettingsFrameSlideInEnabled = True
-SettingsFrameSlideOutEnabled = False
-"""Pixel step for settings frame movement during slidein/slideout."""
-SettingsFrameSlideInStep = 6
-SettingsFrameSlideOutStep = 5
+"""Whether sliding the settings window in/out of view is enabled."""
+WindowSlideInEnabled = True
+WindowSlideOutEnabled = False
+"""Pixel step for settings window movement during slidein/slideout."""
+WindowSlideInStep = 6
+WindowSlideOutStep = 5
 
 """Milliseconds between steps during slidein/slideout."""
-SettingsFrameSlideDelay = 10
+WindowSlideDelay = 10
 
 """Milliseconds between steps during factor fadein/fadeout."""
 FadeDelay = 30

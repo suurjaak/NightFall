@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    03.09.2020
+@modified    04.09.2020
 """
 import collections
 import copy
@@ -609,7 +609,7 @@ class NightFall(wx.App):
 
         if self.frame.Shown \
         and not (event.Active or self.frame_hider or self.frame_shower):
-            millis = conf.SettingsFrameTimeout
+            millis = conf.WindowTimeout
             if millis: # Hide if timeout positive
                 self.frame_hider = wx.CallLater(millis, self.settings_slidein)
         elif event.Active: # kill the hiding timeout, if any
@@ -631,8 +631,8 @@ class NightFall(wx.App):
         if y < display_h:
             if not self.frame_pos_orig:
                 self.frame_pos_orig = self.frame.Position
-            self.frame.Position = (self.frame.Position.x, y + conf.SettingsFrameSlideInStep)
-            self.frame_hider = wx.CallLater(conf.SettingsFrameSlideDelay, self.settings_slidein)
+            self.frame.Position = (self.frame.Position.x, y + conf.WindowSlideInStep)
+            self.frame_hider = wx.CallLater(conf.WindowSlideDelay, self.settings_slidein)
         else:
             self.frame_hider = None
             self.frame.Hide()
@@ -656,8 +656,8 @@ class NightFall(wx.App):
         if not self.frame.Shown:
             self.frame.Show()
         if (y + h > display_h):
-            self.frame.Position = (self.frame.Position.x, y - conf.SettingsFrameSlideOutStep)
-            self.frame_shower = wx.CallLater(conf.SettingsFrameSlideDelay, self.settings_slideout)
+            self.frame.Position = (self.frame.Position.x, y - conf.WindowSlideOutStep)
+            self.frame_shower = wx.CallLater(conf.WindowSlideDelay, self.settings_slideout)
         else:
             self.frame_shower = None
             self.frame_pos_orig = None
@@ -708,9 +708,9 @@ class NightFall(wx.App):
         elif self.frame_shower: # Window is sliding open
             self.frame_shower.Stop()
             self.frame_shower = None
-            millis = conf.SettingsFrameTimeout
+            millis = conf.WindowTimeout
             if millis: # Hide if timeout positive
-                if conf.SettingsFrameSlideInEnabled:
+                if conf.WindowSlideInEnabled:
                     self.frame_hider = wx.CallLater(millis,
                                                     self.settings_slidein)
                 else:
@@ -723,9 +723,9 @@ class NightFall(wx.App):
                 if self.frame_unmoved:
                     x1, y1, x2, y2 = wx.GetClientDisplayRect() # Set in lower right corner
                     self.frame.Position = (x2 - self.frame.Size.x, y2 - self.frame.Size.y)
-                if conf.SettingsFrameSlideOutEnabled:
+                if conf.WindowSlideOutEnabled:
                     self.frame_shower = wx.CallLater(
-                        conf.SettingsFrameSlideDelay, self.settings_slideout)
+                        conf.WindowSlideDelay, self.settings_slideout)
                 else:
                     self.frame.Shown = True
                     self.frame_move_ignore = True
@@ -807,8 +807,7 @@ class NightFall(wx.App):
 
     def create_frame(self):
         """Creates and returns the settings window."""
-        frame = wx.Frame(parent=None, title=conf.Title,
-            size=conf.SettingsFrameSize,
+        frame = wx.Frame(parent=None, title=conf.Title, size=conf.WindowSize,
             style=wx.CAPTION | wx.SYSTEM_MENU | wx.CLOSE_BOX | wx.STAY_ON_TOP
         )
 
@@ -1019,7 +1018,7 @@ class NightFall(wx.App):
         self.frame_console.Bind(wx.EVT_CLOSE, lambda e: self.frame_console.Hide())
 
         icons = wx.IconBundle()
-        icons.AddIcon(wx.Icon(wx.Bitmap((conf.SettingsFrameIcon))))
+        icons.AddIcon(wx.Icon(wx.Bitmap((conf.WindowIcon))))
         frame.SetIcons(icons)
         frame.ToggleWindowStyle(wx.STAY_ON_TOP)
         panel_config.SetFocus()
