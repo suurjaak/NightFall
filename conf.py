@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev3"
+Version = "2.0.dev4"
 
 VersionDate = "03.09.2020"
 
@@ -44,7 +44,7 @@ OptionalFileDirectives = [
     "FactorIconSize", "FadeSteps", "SettingsFrameTimeout", "SettingsFrameSize",
     "SettingsFrameSlideInEnabled", "SettingsFrameSlideOutEnabled",
     "SettingsFrameSlideInStep", "SettingsFrameSlideOutStep",
-    "SettingsFrameSlideDelay",
+    "SettingsFrameSlideDelay", "UnsavedDimmingFactor",
 ]
 Defaults = {}
 
@@ -131,13 +131,16 @@ StartupEnabled = False
 Screen dimming factor, as a list of 4 integers, standing for 3 RGB channels
 and brightness, ranging from 0..255 (brightness at 128 is 100%, lower is darker).
 """
-DimmingFactor = [255, 189, 189, 82]
+DimmingFactor = [255, 211, 176,  57]
 
 """Default gamma coefficients for dimmed display."""
 DefaultDimmingFactor = [255, 189, 189, 82]
 
 """Gamma coefficients for normal display."""
 NormalDimmingFactor = [255, 255, 255, 128]
+
+"""Gamma coefficients being edited in expert settings."""
+UnsavedDimmingFactor = None
 
 """Screen brightness for normal display."""
 NormalBrightness = 128
@@ -192,15 +195,6 @@ AboutText = """
     %(pyinstaller)s
   </ul>
   </p>
-
-  <p>
-  NightFall includes code from:
-  <ul>
-    <li>PsychoPy, <a href="https://github.com/psychopy/psychopy"><font color="%%(linkcolour)s">github.com/psychopy/psychopy</font></a></li>
-    <li>jaraco.windows, <a href="https://github.com/jaraco/jaraco.windows"><font color="%%(linkcolour)s">github.com/jaraco/jaraco.windows</font></a></li>
-  </ul>
-  </p>
-
 </font>
 """ % {"pyinstaller": '<li>PyInstaller, <a href="https://www.pyinstaller.org">'
                       '<font color="%(linkcolour)s">pyinstaller.org</font></a></li>'

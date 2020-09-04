@@ -8,6 +8,7 @@ nocturnal hours, can activate on schedule.
 @modified    03.09.2020
 """
 import collections
+import copy
 import datetime
 import functools
 import math
@@ -237,7 +238,7 @@ class Dimmer(object):
             self.fade_target_factor = self.fade_info = None
             self.fade_delta = self.fade_steps = self.fade_timer = None
             self.fade_current_factor = self.fade_original_factor = None
-        if fade or (info and "APPLY DETAILED" != info):
+        if fade or (info and "THEME MODIFIED" != info):
             self.fade_info = info
             self.fade_steps = conf.FadeSteps
             self.fade_target_factor = factor[:]
@@ -317,14 +318,15 @@ class NightFall(wx.App):
         wx.App.__init__(self, redirect, filename, useBestVisual, clearSigInt)
         self.dimmer = Dimmer(self)
 
-        frame = self.frame = self.create_frame()
         self.frame_hider    = None # wx.CallLater object for timed hiding on blur
         self.frame_shower   = None # wx.CallLater object for timed showing on slideout
         self.frame_pos_orig = None # Position of frame before slidein
-        self.frame_unmoved  = True
+        self.frame_unmoved  = True # Whether user has moved the window
         self.frame_move_ignore = False # Ignore EVT_MOVE on showing window
         self.frame_has_modal   = False # Whether a modal dialog is open
         self.dt_tray_click     = None  # Last click timestamp, for double-click
+        self.name_selected     = None # Last named theme selected
+        self.frame = frame = self.create_frame()
 
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
         frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
@@ -349,6 +351,7 @@ class NightFall(wx.App):
         frame.Bind(EVT_TIME_SELECTOR, self.on_change_schedule)
         frame.Bind(wx.EVT_CLOSE,      self.on_toggle_settings)
         frame.Bind(wx.EVT_ACTIVATE,   self.on_activate_settings)
+        frame.Bind(wx.EVT_MOVE,       self.on_move)
         for s in frame.sliders_factor:
             frame.Bind(wx.EVT_SCROLL, self.on_change_factor_detail, s)
             frame.Bind(wx.EVT_SLIDER, self.on_change_factor_detail, s)
@@ -368,8 +371,9 @@ class NightFall(wx.App):
         trayicon.Bind(wx.adv.EVT_TASKBAR_RIGHT_DOWN,  self.on_open_tray_menu)
 
         self.dimmer.start()
-        if conf.StartMinimizedParameter not in sys.argv: frame.Show()
-        frame.Bind(wx.EVT_MOVE, self.on_move) # Skip first move event on Show()
+        if conf.StartMinimizedParameter not in sys.argv:
+            self.frame_move_ignore = True # Skip first move event on Show()
+            frame.Show()
 
 
     def on_dimmer_event(self, event):
@@ -448,21 +452,20 @@ class NightFall(wx.App):
     def on_stored_factor(self, event=None):
         """Applies the selected stored dimming factor."""
         selected = self.frame.list_factors.GetSelection()
-        if selected >= 0:
-            factor = self.frame.list_factors.GetItemFactor(selected)
-            if not self.dimmer.should_dim():
-                conf.DimmingEnabled = True
-                self.frame.cb_enabled.Value = True
-                self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
-            self.dimmer.set_factor(factor, "THEME APPLIED")
+        if selected < 0: return
+
+        self.name_selected, factor = self.frame.list_factors.GetItemData(selected)
+        if not self.dimmer.should_dim():
+            conf.DimmingEnabled = True
+            self.frame.cb_enabled.Value = True
+            self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
+        self.dimmer.set_factor(factor, "THEME APPLIED")
 
 
     def on_save_factor(self, event=None):
         """Stores the currently set rgb+brightness values."""
         factor = conf.DimmingFactor
-        name = next((k for k, v in conf.StoredFactors.items()
-                     if v == factor), None)
-        name0 = name = name or get_factor_str(factor, short=True)
+        name0 = name = self.name_selected or get_factor_str(factor, short=True)
 
         self.frame_has_modal = True
         dlg = wx.TextEntryDialog(self.frame, "Name:", conf.Title,
@@ -471,9 +474,18 @@ class NightFall(wx.App):
         resp = dlg.ShowModal()
         self.frame_has_modal = False
         if wx.ID_OK != resp: return
+
         name = dlg.GetValue().strip()
         if not name: return
-        if name != name0 and name in conf.StoredFactors:
+
+        if factor == conf.StoredFactors.get(name): # No change
+            conf.UnsavedDimmingFactor = None
+            conf.save()
+            self.frame.combo_factors.Delete(0)
+            self.frame.combo_factors.Select(self.frame.combo_factors.FindIndex(name))
+            return
+
+        if name in conf.StoredFactors:
             self.frame_has_modal = True
             resp = wx.MessageBox('Theme named "%s" already exists, '
                 'are you sure you want to overwrite it?' % name, conf.Title,
@@ -482,14 +494,22 @@ class NightFall(wx.App):
             self.frame_has_modal = False
             if wx.OK != resp: return
 
-        thumb = wx.lib.agw.thumbnailctrl.Thumb(self, folder="", filename=name, caption=name)
-        bmp = get_factor_bitmap(factor)
-        lst = self.frame.list_factors
-        lst.RegisterBitmap(name, bmp, factor)
-        thumbs = [lst.GetItem(i) for i in range(lst.GetItemCount())]
-        thumbs.append(thumb)
-        lst.ShowThumbs(thumbs, caption="")
+        lst, cmb = self.frame.list_factors, self.frame.combo_factors
+        lst.RegisterBitmap(name, get_factor_bitmap(factor), factor)
+        if name in conf.StoredFactors:
+            cmb.ReplaceItem((name, factor), cmb.FindIndex(name=name))
+            lst.Refresh() # @todo vt kas on vaja
+        else:
+            thumbs = [lst.GetItem(i) for i in range(lst.GetItemCount())]
+            thumb = wx.lib.agw.thumbnailctrl.Thumb(self, folder="", filename=name, caption=name)
+            thumbs.append(thumb)
+            lst.ShowThumbs(thumbs, caption="")
+            choices = conf.StoredFactors.items()
+            cmb.SetItems(sorted(choices + [(name, factor)]))
+        cmb.Select(cmb.FindIndex(name=name))
+        lst.SetSelection(lst.FindIndex(name=name))
         conf.StoredFactors[name] = factor
+        conf.UnsavedDimmingFactor = None
         conf.save()
 
 
@@ -498,13 +518,10 @@ class NightFall(wx.App):
         selected = self.frame.list_factors.GetSelection()
         if selected < 0: return
 
-        name   = self.frame.list_factors.GetItemName(selected)
-        factor = self.frame.list_factors.GetItemFactor(selected)
+        name, factor = self.frame.list_factors.GetItemData(selected)
         self.frame_has_modal = True
-        resp = wx.MessageBox(
-            'Remove factor "%s" from list?' % name,
-            conf.Title, wx.OK | wx.CANCEL | wx.ICON_WARNING
-        )
+        resp = wx.MessageBox('Delete theme "%s"?' % name,
+                             conf.Title, wx.OK | wx.CANCEL | wx.ICON_WARNING)
         self.frame_has_modal = False
         if wx.OK != resp: return
 
@@ -514,17 +531,17 @@ class NightFall(wx.App):
         self.frame.list_factors.UnregisterBitmap(name)
         self.frame.list_factors.RemoveItemAt(selected)
         self.frame.list_factors.Refresh()
-
-        # Synchronize new selection in list and combo
-        idx = self.frame.combo_factors.FindIndex(name=name)
-        if idx >= 0: self.frame.combo_factors.Delete(idx)
         if self.dimmer.should_dim() and factor == conf.DimmingFactor:
             self.dimmer.toggle_dimming(False)
-        idx2 = self.frame.combo_factors.Selection
+
+        idx, idx2 = self.frame.combo_factors.FindIndex(name=name), -1
+        if idx >= 0:
+            self.frame.combo_factors.Delete(idx)
+            idx2 = self.frame.combo_factors.Selection
         if idx2 >= 0:
-            name2 = self.frame.combo_factors.GetItemName(idx2)
-            lidx = self.frame.list_factors.FindIndex(name=name2)
-            if lidx >= 0: self.frame.list_factors.SetSelection(lidx)
+            name2, factor2 = self.frame.combo_factors.GetItemData(idx2)
+            self.name_selected = name2 if name2 in conf.StoredFactors else None
+            conf.DimmingFactor = factor2
 
 
     def on_open_tray_menu(self, event=None):
@@ -725,12 +742,19 @@ class NightFall(wx.App):
             new = isinstance(event, wx.ScrollEvent) and s is event.EventObject
             value = event.GetPosition() if new else s.GetValue()
             factor.append(value)
-        self.dimmer.set_factor(factor, "APPLY DETAILED")
+        self.dimmer.set_factor(factor, "THEME MODIFIED")
+        if conf.UnsavedDimmingFactor:
+            self.frame.combo_factors.ReplaceItem((" (unsaved) ", factor), 0)
+        else:
+            self.frame.combo_factors.Insert((" (unsaved) ", factor), 0)
+        self.frame.combo_factors.Select(0)
+        conf.UnsavedDimmingFactor = factor
 
 
     def on_change_factor_combo(self, event):
         """Handler for changing the factor combobox."""
-        factor = self.frame.combo_factors.GetItemFactor(event.Selection)
+        name, factor = self.frame.combo_factors.GetItemData(event.Selection)
+        self.name_selected = name if name in conf.StoredFactors else None
         self.dimmer.set_factor(factor, "THEME APPLIED")
 
 
@@ -839,9 +863,10 @@ class NightFall(wx.App):
         sizer_right.Add(frame.label_factor)
 
         choices = sorted(conf.StoredFactors.items())
-        if conf.DimmingFactor not in conf.StoredFactors.values():
-            choices.insert(0, ("(unsaved)", conf.DimmingFactor))
-        selected = next(i for i, (a, b) in enumerate(choices) if b == conf.DimmingFactor)
+        if conf.UnsavedDimmingFactor:
+            choices.insert(0, (" (unsaved) ", conf.UnsavedDimmingFactor))
+        selected = next((i for i, (a, b) in enumerate(choices)
+                         if b == conf.DimmingFactor), None)
         combo_factors = frame.combo_factors = FactorComboBox(panel_config, 
             choices=choices, selected=selected, 
             bitmapsize=conf.FactorIconSize, style=wx.CB_READONLY)
@@ -875,7 +900,9 @@ class NightFall(wx.App):
                 filename=name, caption=name))
         list_factors.ShowThumbs(thumbs, caption="")
         idx = list_factors.FindIndex(factor=conf.DimmingFactor)
-        if idx >= 0: list_factors.SetSelection(idx)
+        if idx >= 0:
+            list_factors.SetSelection(idx)
+            self.name_selected = list_factors.GetItemName(idx)
 
         panel_factors.Sizer.Add(list_factors, border=5, proportion=1, flag=wx.TOP | wx.GROW)
         panel_saved_buttons = wx.Panel(panel_factors)
@@ -935,7 +962,7 @@ class NightFall(wx.App):
         panel_expert.Sizer.Add(sizer_bar, proportion=1, flag=wx.GROW)
 
         # Create About-page
-        label_about = frame.label_about = wx.html.HtmlWindow(panel_about, style=wx.html.HW_SCROLLBAR_NEVER)
+        label_about = frame.label_about = wx.html.HtmlWindow(panel_about)
         args = {"textcolour": ColourManager.ColourHex(wx.SYS_COLOUR_BTNTEXT),
                 "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT)}
         label_about.SetPage(conf.AboutText % args)
@@ -1525,7 +1552,7 @@ class FactorComboBox(wx.adv.OwnerDrawnComboBox):
         self.MinSize = w + bordersz[0] + thumbsz[0] + 3, h + bordersz[1]
         self.Font = wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
                             wx.FONTWEIGHT_BOLD, faceName="Arial")
-        if choices: self.Selection = 0 if selected is not None else selected
+        if choices: self.Selection = 0 if selected is None else selected
 
 
     def OnDrawItem(self, dc, rect, item, flags):
@@ -1560,7 +1587,12 @@ class FactorComboBox(wx.adv.OwnerDrawnComboBox):
 
     def GetItemFactor(self, index):
         """Returns the dimming factor at index."""
-        return self._factors[index][1]
+        return self._factors[index][1][:]
+
+
+    def GetItemData(self, index):
+        """Returns the name and dimming factor at index."""
+        return copy.deepcopy(self._factors[index])
 
 
     def FindIndex(self, name=None, factor=None):
@@ -1573,9 +1605,30 @@ class FactorComboBox(wx.adv.OwnerDrawnComboBox):
         return -1
 
 
+    def Insert(self, item, pos):
+        """Inserts an item at position."""
+        pos = min(pos, len(self._factors)) % len(self._factors)
+        self._factors.insert(pos, item)
+        super(FactorComboBox, self).Insert(str(len(self._factors)), pos)
+
+
+    def ReplaceItem(self, item, pos):
+        """Replaces item content at position."""
+        if not self._factors: return
+        pos = min(pos, len(self._factors)) % len(self._factors)
+        self._factors[pos] = item
+
+
+    def SetItems(self, items):
+        """Replaces all items in control."""
+        self._factors = list(items)
+        return super(FactorComboBox, self).SetItems(map(str, range(len(items))))
+
+
     def Delete(self, n):
         """Deletes the item with specified index."""
-        if n >= len(self._factors): return
+        if not self._factors or n >= len(self._factors): return
+        if n < 0: n %= len(self._factors)
         super(FactorComboBox, self).Delete(n)
         del self._factors[n]
         self.Select(min(n, len(self._factors) - 1))
@@ -1704,14 +1757,21 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
 
     def GetItemFactor(self, index):
         """Returns the factor for the specified index."""
-        thumb_ctrl = self.GetItem(index)
-        if thumb_ctrl: return BitmapListHandler.GetFactor(thumb_ctrl.GetFileName())
+        thumb = self.GetItem(index)
+        if thumb: return BitmapListHandler.GetFactor(thumb.GetFileName())
 
 
     def GetItemName(self, index):
         """Returns the factor name for the specified index."""
-        thumb_ctrl = self.GetItem(index)
-        if thumb_ctrl: return thumb_ctrl.GetFileName()
+        thumb = self.GetItem(index)
+        if thumb: return thumb.GetFileName()
+
+
+    def GetItemData(self, index):
+        """Returns (name, factor) for the specified index."""
+        thumb = self.GetItem(index)
+        if thumb:
+            return thumb.GetFileName(), BitmapListHandler.GetFactor(thumb.GetFileName())
 
 
     def FindIndex(self, name=None, factor=None):
