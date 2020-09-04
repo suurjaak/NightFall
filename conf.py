@@ -36,15 +36,14 @@ else:
 
 """List of attribute names that can be saved to and loaded from ConfigFile."""
 FileDirectives = [
-    "DimmingEnabled", "ScheduleEnabled", "DimmingFactor", "Schedule",
-    "StoredFactors",
+    "CurrentTheme", "Schedule", "ScheduleEnabled", "ThemeEnabled", "Themes",
 ]
 """List of user-modifiable attributes, saved if changed from default."""
 OptionalFileDirectives = [
-    "FactorIconSize", "FadeSteps", "WindowTimeout", "WindowSize",
+    "FadeSteps", "ThemeBitmapSize", "WindowTimeout", "WindowSize",
     "WindowSlideInEnabled", "WindowSlideOutEnabled",
     "WindowSlideInStep", "WindowSlideOutStep",
-    "WindowSlideDelay", "UnsavedDimmingFactor",
+    "WindowSlideDelay", "UnsavedTheme",
 ]
 Defaults = {}
 
@@ -60,13 +59,11 @@ TrayTooltip = "NightFall (double-click to toggle dimming)"
 """URL to program homepage."""
 HomeUrl = "https://github.com/suurjaak/NightFall"
 
-"""Saved factor list icon."""
-ListIcon = os.path.join(ResourceDirectory, "listicon.png")
-
 """Clock central icon."""
 ClockIcon = os.path.join(ResourceDirectory, "icon_48x48.png")
 
-FactorIconSize = (80, 48)
+"""Size for theme bitmaps, as (w, h)."""
+ThemeBitmapSize = (80, 48)
 
 """Window icon."""
 WindowIcon = os.path.join(ResourceDirectory, "icon.png")
@@ -88,10 +85,10 @@ WindowSlideOutStep = 5
 """Milliseconds between steps during slidein/slideout."""
 WindowSlideDelay = 10
 
-"""Milliseconds between steps during factor fadein/fadeout."""
+"""Milliseconds between steps during theme fadein/fadeout."""
 FadeDelay = 30
 
-"""Number of steps to take during factor fadein/fadeout."""
+"""Number of steps to take during theme fadein/fadeout."""
 FadeSteps = 20
 
 """Command-line parameter for running the program with settings minimized."""
@@ -119,7 +116,7 @@ system calls to fail for unknown reason.
 ValidColourRange = (59, 255)
 
 """Whether dimming is currently enabled."""
-DimmingEnabled = False
+ThemeEnabled = False
 
 """Whether time-scheduled automatic dimming is enabled."""
 ScheduleEnabled = False
@@ -128,22 +125,22 @@ ScheduleEnabled = False
 StartupEnabled = False
 
 """
-Screen dimming factor, as a list of 4 integers, standing for 3 RGB channels
-and brightness, ranging from 0..255 (brightness at 128 is 100%, lower is darker).
+Screen colour theme, as a list of 4 integers, standing for 3 RGB channels
+and brightness, ranging from 0..255 (brightness 128 is 100%, 255 is superbright).
 """
-DimmingFactor = [255, 211, 176,  57]
+CurrentTheme = [255, 211, 176,  57]
 
 """Gamma coefficients for normal display."""
-NormalDimmingFactor = [255, 255, 255, 128]
+NormalTheme = [255, 255, 255, 128]
 
 """Gamma coefficients being edited in theme editor."""
-UnsavedDimmingFactor = None
+UnsavedTheme = None
 
 """Screen brightness for normal display."""
 NormalBrightness = 128
 
-"""Pre-stored dimming factors, as {name: [r, g, b, brightness]}."""
-StoredFactors = {
+"""Stored colour themes, as {name: [r, g, b, brightness]}."""
+Themes = {
     "alpenglow":   [255, 211, 176,  57],
     "dawn":        [255, 189, 189,  82],
     "gloom":       [255, 255, 255,   0],
@@ -153,7 +150,6 @@ StoredFactors = {
     "twilight":    [255, 179, 179,  57],
     "fireside":    [255, 128, 128, 128],
 }
-DefaultStoredFactors = StoredFactors.copy()
 
 """The dimming schedule, [1,0,..] per each minute."""
 Schedule = []
@@ -166,7 +162,7 @@ DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
 
 """Information text shown on theme editor page."""
 InfoEditorText = (
-    "Fine-tune the individual factors that make up the display: brightness \n"
+    "Fine-tune the components that make up the display: brightness \n"
     "(ranges from dark to superbright) and red-green-blue colour channels.\n\n"
     "A lot of the darker ranges will not be accepted by the graphics hardware."
 )
@@ -196,9 +192,6 @@ AboutText = """
 """ % {"pyinstaller": '<li>PyInstaller, <a href="https://www.pyinstaller.org">'
                       '<font color="%(linkcolour)s">pyinstaller.org</font></a></li>'
                       if getattr(sys, 'frozen', False) else ""}
-
-"""Error text shown if applying a factor failed."""
-FactorFailedText = "Selected combo is invalid"
 
 
 def load():

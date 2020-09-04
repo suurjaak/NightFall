@@ -6,7 +6,7 @@ Accessing gamma ramp functionality on the basis of PsychoPy 1.75 by Jonathan Pei
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    03.09.2020
+@modified    04.09.2020
 """
 import ctypes
 import ctypes.util
@@ -22,7 +22,7 @@ elif sys.platform.startswith("linux"):
     xlib = ctypes.CDLL(ctypes.util.find_library("X11"))
 
 
-def set_screen_factor(factor):
+def set_screen_gamma(factor):
     """
     Changes the brightness and color gamma of the screen.
 

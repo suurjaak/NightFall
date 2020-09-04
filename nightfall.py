@@ -46,18 +46,21 @@ class Dimmer(object):
     INTERVAL = 30
 
     def __init__(self, event_handler):
-        conf.load()
         self.handler = event_handler
-        self.current_factor = conf.NormalDimmingFactor # Current screen factor
+        self.service = StartupService()
+
+        conf.load()
+        self.check_conf()
+
+        self.current_theme = copy.copy(conf.NormalTheme) # Applied colour theme
         self.fade_timer = None # wx.Timer instance for applying fading
         self.fade_steps = None # Number of steps to take during a fade
-        self.fade_delta = None # Delta to add to factor elements on fade step
-        self.fade_target_factor = None # Final factor values during fade
-        self.fade_current_factor = None # Factor float values during fade
-        self.fade_original_factor = None # Original factor before applying fade
-        self.fade_info = None # info given for applying/setting factor
-        self.service = StartupService()
-        self.check_conf()
+        self.fade_delta = None # Delta to add to theme components on fade step
+        self.fade_target_theme   = None # Final theme values during fade
+        self.fade_current_theme  = None # Theme float values during fade
+        self.fade_original_theme = None # Original theme before applying fade
+        self.fade_info = None # Info given for applying/setting theme
+
         self.timer = wx.Timer()
         self.timer.Bind(wx.EVT_TIMER, self.on_timer, self.timer)
         self.timer.Start(milliseconds=1000 * self.INTERVAL)
@@ -66,22 +69,24 @@ class Dimmer(object):
     def check_conf(self):
         """Sanity-checks configuration loaded from file."""
 
-        def is_valid(factor):
-            if not isinstance(factor, (list, tuple)) \
-            or len(factor) != len(conf.Defaults["DimmingFactor"]): return False
-            for g in factor[:-1]:
+        def is_valid(theme):
+            if not isinstance(theme, (list, tuple)) \
+            or len(theme) != len(conf.NormalTheme): return False
+            for g in theme[:-1]:
                 if not isinstance(g, (int, float)) \
                 or not (conf.ValidColourRange[0] <= g <= conf.ValidColourRange[-1]):
                     return False
-            return 0 <= factor[-1] <= 255
+            return 0 <= theme[-1] <= 255
 
-        if not is_valid(conf.DimmingFactor):
-            conf.DimmingFactor = conf.Defaults["DimmingFactor"]
-        if not isinstance(conf.StoredFactors, dict):
-            conf.StoredFactors = conf.DefaultStoredFactors.copy()
+        if not is_valid(conf.CurrentTheme):
+            conf.CurrentTheme = copy.copy(conf.Defaults["CurrentTheme"])
+        if not is_valid(conf.UnsavedTheme):
+            conf.UnsavedTheme = None
+        if not isinstance(conf.Themes, dict):
+            conf.Themes = copy.deepcopy(conf.Defaults["Themes"])
 
-        for name, factor in conf.StoredFactors.items():
-            if not is_valid(factor): conf.StoredFactors.pop(name)
+        for name, theme in conf.Themes.items():
+            if not is_valid(theme): conf.Themes.pop(name)
 
         if not isinstance(conf.Schedule, list) \
         or len(conf.Schedule) != len(conf.DefaultSchedule):
@@ -94,24 +99,24 @@ class Dimmer(object):
 
     def start(self):
         """Starts handler: updates GUI settings, and dims if so configured."""
-        self.post_event("FACTOR CHANGED",   conf.DimmingFactor)
-        self.post_event("GAMMA TOGGLED",    conf.DimmingEnabled)
+        self.post_event("THEME CHANGED",    conf.CurrentTheme)
+        self.post_event("GAMMA TOGGLED",    conf.ThemeEnabled)
         self.post_event("SCHEDULE TOGGLED", conf.ScheduleEnabled)
         self.post_event("SCHEDULE CHANGED", conf.Schedule)
         self.post_event("STARTUP TOGGLED",  conf.StartupEnabled)
         self.post_event("STARTUP POSSIBLE", self.service.can_start())
         if self.should_dim():
-            self.apply_factor(conf.DimmingFactor, fade=True)
+            self.apply_theme(conf.CurrentTheme, fade=True)
             msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() else \
                   "GAMMA ON"
-            self.post_event(msg, conf.DimmingFactor)
+            self.post_event(msg, conf.CurrentTheme)
         else:
-            self.apply_factor(conf.NormalDimmingFactor)
+            self.apply_theme(conf.NormalTheme)
 
 
     def stop(self):
         """Stops any current dimming."""
-        self.apply_factor(conf.NormalDimmingFactor)
+        self.apply_theme(conf.NormalTheme)
         conf.save()
 
 
@@ -126,32 +131,31 @@ class Dimmer(object):
         Handler for a timer event, checks whether to start/stop dimming on
         time-scheduled configuration.
         """
-        if conf.ScheduleEnabled and not conf.DimmingEnabled:
-            factor, msg = conf.NormalDimmingFactor, "GAMMA OFF"
+        if conf.ScheduleEnabled and not conf.ThemeEnabled:
+            theme, msg = conf.NormalTheme, "GAMMA OFF"
             if self.should_dim_scheduled():
-                factor, msg = conf.DimmingFactor, "SCHEDULE IN EFFECT"
-            if factor != self.current_factor:
-                self.apply_factor(factor, fade=True)
+                theme, msg = conf.CurrentTheme, "SCHEDULE IN EFFECT"
+            if theme != self.current_theme:
+                self.apply_theme(theme, fade=True)
                 self.post_event(msg)
 
 
-    def set_factor(self, factor, info=None):
+    def set_theme(self, theme, info=None):
         """
-        Sets the current screen dimming factor, and applies it if enabled.
+        Sets the current screen colour theme, and applies it if enabled.
 
-        @param   factor       a 4-byte list, for 3 RGB channels and brightness,
-                              0..255
-        @param   info         info given to callback event, if any
-        @return               False on failure, True otherwise
+        @param   theme  a 4-byte list, for 3 RGB channels and brightness, 0..255
+        @param   info   info given to callback event, if any
+        @return         False on failure, True otherwise
         """
         result = True
-        changed = (factor != self.current_factor)
+        changed = (theme != self.current_theme)
         if changed:
-            conf.DimmingFactor = factor[:]
-            self.post_event("FACTOR CHANGED", factor, info)
+            conf.CurrentTheme = theme[:]
+            self.post_event("THEME CHANGED", theme, info)
             conf.save()
             if self.should_dim():
-                result = self.apply_factor(factor, info)
+                result = self.apply_theme(theme, info)
         return result
 
 
@@ -162,13 +166,13 @@ class Dimmer(object):
             conf.ScheduleEnabled = enabled
             self.post_event("SCHEDULE TOGGLED", conf.ScheduleEnabled)
             conf.save()
-            factor, msg = conf.NormalDimmingFactor, "GAMMA OFF"
+            theme, msg = conf.NormalTheme, "GAMMA OFF"
             if self.should_dim():
-                factor = conf.DimmingFactor
+                theme = conf.CurrentTheme
                 msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() \
                       else "GAMMA ON"
-            self.apply_factor(factor, fade=True)
-            self.post_event(msg, factor)
+            self.apply_theme(theme, fade=True)
+            self.post_event(msg, theme)
 
 
     def toggle_startup(self, enabled):
@@ -195,13 +199,13 @@ class Dimmer(object):
         conf.save()
         if did_dim_scheduled and self.should_dim_scheduled(): return
 
-        factor, msg = conf.NormalDimmingFactor, "GAMMA OFF"
+        theme, msg = conf.NormalTheme, "GAMMA OFF"
         if self.should_dim():
-            factor = conf.DimmingFactor
+            theme = conf.CurrentTheme
             msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() \
                   else "GAMMA ON"
-        self.apply_factor(factor, fade=True)
-        self.post_event(msg, factor)
+        self.apply_theme(theme, fade=True)
+        self.post_event(msg, theme)
 
 
     def should_dim(self):
@@ -209,7 +213,7 @@ class Dimmer(object):
         Returns whether dimming should currently be applied, based on global
         enabled flag and enabled time selection.
         """
-        return conf.DimmingEnabled or self.should_dim_scheduled()
+        return conf.ThemeEnabled or self.should_dim_scheduled()
 
 
     def should_dim_scheduled(self):
@@ -223,86 +227,85 @@ class Dimmer(object):
         return result
 
 
-    def apply_factor(self, factor, info=None, fade=False):
+    def apply_theme(self, theme, info=None, fade=False):
         """
-        Applies the specified gamma correction factor.
+        Applies the specified colour theme.
 
-        @param   info         info given to callback event, if any
-        @param   fade         if True, changes factor from current to new in a
-                              number of steps smoothly
-        @return               False on failure, True otherwise
+        @param   info   info given to callback event, if any
+        @param   fade   if True, changes theme from current to new smoothly,
+                        in a number of steps
+        @return         False on failure, True otherwise
         """
         result = True
         if self.fade_timer:
             self.fade_timer.Stop()
-            self.fade_target_factor = self.fade_info = None
+            self.fade_target_theme = self.fade_info = None
             self.fade_delta = self.fade_steps = self.fade_timer = None
-            self.fade_current_factor = self.fade_original_factor = None
+            self.fade_current_theme = self.fade_original_theme = None
         if fade or (info and "THEME MODIFIED" != info):
             self.fade_info = info
             self.fade_steps = conf.FadeSteps
-            self.fade_target_factor = factor[:]
-            self.fade_current_factor = map(float, self.current_factor)
-            self.fade_original_factor = self.current_factor[:]
+            self.fade_target_theme = theme[:]
+            self.fade_current_theme = map(float, self.current_theme)
+            self.fade_original_theme = self.current_theme[:]
             self.fade_delta = []
-            for new, now in zip(factor, self.current_factor):
+            for new, now in zip(theme, self.current_theme):
                 self.fade_delta.append(float(new - now) / conf.FadeSteps)
             self.fade_timer = wx.CallLater(conf.FadeDelay, self.on_fade_step)
-        elif gamma.set_screen_factor(factor):
-            self.current_factor = factor[:]
+        elif gamma.set_screen_gamma(theme):
+            self.current_theme = theme[:]
         else:
-            self.post_event("THEME FAILED", factor, info)
+            self.post_event("THEME FAILED", theme, info)
             result = False
         return result
 
 
     def on_fade_step(self):
         """
-        Handler for a fade step, applies the fade delta to screen factor and
+        Handler for a fade step, applies the fade delta to colour theme and
         schedules another event, if more steps left.
         """
         self.fade_timer = None
         if self.fade_steps:
-            self.fade_current_factor = [(current + delta) for current, delta
-                in zip(self.fade_current_factor, self.fade_delta)]
+            self.fade_current_theme = [(current + delta) for current, delta
+                in zip(self.fade_current_theme, self.fade_delta)]
             self.fade_steps -= 1
             if not self.fade_steps:
                 # Final step: use exact given target, to avoid rounding errors
-                current_factor = self.fade_target_factor
+                current_theme = self.fade_target_theme
             else:
-                current_factor = map(int, map(round, self.fade_current_factor))
-            success = self.apply_factor(current_factor)
+                current_theme = map(int, map(round, self.fade_current_theme))
+            success = self.apply_theme(current_theme)
             if success and self.should_dim() \
-            and self.fade_original_factor != conf.NormalDimmingFactor:
-                # Send incremental change if fading from one factor to another.
-                self.post_event("FACTOR CHANGED", current_factor, self.fade_info)
+            and self.fade_original_theme != conf.NormalTheme:
+                # Send incremental change if fading from one theme to another.
+                self.post_event("THEME CHANGED", current_theme, self.fade_info)
             elif not success:
                 if not self.fade_steps:
-                    # Unsupported factor: jump back to normal on last step.
-                    self.apply_factor(conf.NormalDimmingFactor, fade=False)
+                    # Unsupported theme: jump back to normal on last step.
+                    self.apply_theme(conf.NormalTheme, fade=False)
             if self.fade_steps:
                 self.fade_timer = wx.CallLater(conf.FadeDelay, self.on_fade_step)
             else:
-                self.fade_target_factor = None
+                self.fade_target_theme = None
                 self.fade_delta = self.fade_steps = self.fade_info = None
-                self.fade_current_factor = self.fade_original_factor = None
+                self.fade_current_theme = self.fade_original_theme = None
 
 
 
     def toggle_dimming(self, enabled):
         """Toggles the global dimmer flag enabled/disabled."""
-        changed = (conf.DimmingEnabled != enabled)
-        conf.DimmingEnabled = enabled
+        changed = (conf.ThemeEnabled != enabled)
+        conf.ThemeEnabled = enabled
         msg = "GAMMA TOGGLED"
         if self.should_dim():
-            factor = conf.DimmingFactor
-            if self.should_dim_scheduled():
-                msg = "SCHEDULE IN EFFECT"
+            theme = conf.CurrentTheme
+            if self.should_dim_scheduled(): msg = "SCHEDULE IN EFFECT"
         else:
-            factor = conf.NormalDimmingFactor
-        self.apply_factor(factor, fade=True)
+            theme = conf.NormalTheme
+        self.apply_theme(theme, fade=True)
         if changed: conf.save()
-        self.post_event(msg, conf.DimmingEnabled)
+        self.post_event(msg, conf.ThemeEnabled)
 
 
 
@@ -330,19 +333,19 @@ class NightFall(wx.App):
 
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
         frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
-            self.on_change_stored_factor, frame.list_factors._scrolled)
+            self.on_select_list_theme, frame.list_themes._scrolled)
         frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_DCLICK,
-            self.on_stored_factor, frame.list_factors._scrolled)
+            self.on_apply_list_theme, frame.list_themes._scrolled)
 
         ColourManager.Init(frame)
         frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_dimming, frame.cb_enabled)
         frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_startup, frame.cb_startup)
         frame.Bind(wx.EVT_BUTTON,     self.on_toggle_settings, frame.button_ok)
         frame.Bind(wx.EVT_BUTTON,     self.on_exit, frame.button_exit)
-        frame.Bind(wx.EVT_BUTTON,     self.on_stored_factor, frame.button_saved_apply)
-        frame.Bind(wx.EVT_BUTTON,     self.on_delete_factor, frame.button_saved_delete)
-        frame.Bind(wx.EVT_BUTTON,     self.on_save_factor, frame.button_save)
-        frame.Bind(wx.EVT_COMBOBOX,   self.on_change_factor_combo, frame.combo_factors)
+        frame.Bind(wx.EVT_BUTTON,     self.on_apply_list_theme, frame.button_apply)
+        frame.Bind(wx.EVT_BUTTON,     self.on_delete_theme, frame.button_delete)
+        frame.Bind(wx.EVT_BUTTON,     self.on_save_theme,   frame.button_save)
+        frame.Bind(wx.EVT_COMBOBOX,   self.on_select_combo_theme, frame.combo_themes)
         frame.link_www.Bind(wx.html.EVT_HTML_LINK_CLICKED,
                             lambda e: webbrowser.open(e.GetLinkInfo().Href))
         frame.label_about.Bind(wx.html.EVT_HTML_LINK_CLICKED,
@@ -352,11 +355,11 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_CLOSE,      self.on_toggle_settings)
         frame.Bind(wx.EVT_ACTIVATE,   self.on_activate_settings)
         frame.Bind(wx.EVT_MOVE,       self.on_move)
-        for s in frame.sliders_factor:
-            frame.Bind(wx.EVT_SCROLL, self.on_change_factor_detail, s)
-            frame.Bind(wx.EVT_SLIDER, self.on_change_factor_detail, s)
+        for s in frame.sliders:
+            frame.Bind(wx.EVT_SCROLL, self.on_change_theme_detail, s)
+            frame.Bind(wx.EVT_SLIDER, self.on_change_theme_detail, s)
         self.Bind(EVT_DIMMER,         self.on_dimmer_event)
-        self.Bind(wx.EVT_LEFT_DCLICK, self.on_toggle_console, frame.label_factor)
+        self.Bind(wx.EVT_LEFT_DCLICK, self.on_toggle_console, frame.label_combo)
         self.frame.Bind(wx.EVT_SYS_COLOUR_CHANGED, self.on_sys_colour_change)
 
         self.TRAYICONS = {False: {}, True: {}}
@@ -379,23 +382,23 @@ class NightFall(wx.App):
     def on_dimmer_event(self, event):
         """Handler for all events sent from Dimmer, updates UI controls."""
         topic, data, info = event.Topic, event.Data, event.Info
-        if "FACTOR CHANGED" == topic:
+        if "THEME CHANGED" == topic:
             for i, g in enumerate(data):
-                self.frame.sliders_factor[i].SetValue(g)
-            bmp, tooltip = get_factor_bitmap(data, border=True), get_factor_str(data)
+                self.frame.sliders[i].SetValue(g)
+            bmp, tooltip = get_theme_bitmap(data, border=True), get_theme_str(data)
             for b in [self.frame.bmp_detail]: b.Bitmap, b.ToolTip = bmp, tooltip
             self.frame.label_error.Hide()
         elif "THEME FAILED" == topic:
-            bmp = get_factor_bitmap(data, supported=False)
-            tooltip = get_factor_str(data, supported=False)
+            bmp = get_theme_bitmap(data, supported=False)
+            tooltip = get_theme_str(data, supported=False)
             for b in [self.frame.bmp_detail]: b.Bitmap, b.ToolTip = bmp, tooltip
             self.frame.label_error.Label = "Setting unsupported by hardware."
             self.frame.label_error.Show()
-            self.frame.label_factor.ContainingSizer.Layout()
+            self.frame.label_error.ContainingSizer.Layout()
             self.frame.label_error.Wrap(self.frame.label_error.Size[0])
             if "THEME APPLIED" == info:
-                index = self.frame.list_factors.FindIndex(factor=data)
-                if index >= 0: self.frame.list_factors.GetItem(i).SetBitmap(bmp)
+                index = self.frame.list_themes.FindIndex(theme=data)
+                if index >= 0: self.frame.list_themes.GetItem(i).SetBitmap(bmp)
                 self.frame_has_modal = True
                 wx.MessageBox("Setting not supported by graphics hardware.",
                               conf.Title, wx.OK | wx.ICON_WARNING)
@@ -404,8 +407,8 @@ class NightFall(wx.App):
             self.frame.cb_enabled.Value = data
             self.set_tray_icon(self.TRAYICONS[data][conf.ScheduleEnabled])
             if self.dimmer.should_dim():
-                idx = self.frame.list_factors.FindIndex(factor=conf.DimmingFactor)
-                if idx >= 0: self.frame.list_factors.SetSelection(idx)
+                idx = self.frame.list_themes.FindIndex(theme=conf.CurrentTheme)
+                if idx >= 0: self.frame.list_themes.SetSelection(idx)
         elif "SCHEDULE TOGGLED" == topic:
             self.frame.cb_schedule.Value = data
             self.set_tray_icon(self.TRAYICONS[self.dimmer.should_dim()][data])
@@ -413,8 +416,8 @@ class NightFall(wx.App):
             self.frame.selector_time.SetSelections(data)
         elif "SCHEDULE IN EFFECT" == topic:
             self.set_tray_icon(self.TRAYICONS[True][True])
-            idx = self.frame.list_factors.FindIndex(factor=conf.DimmingFactor)
-            if idx >= 0: self.frame.list_factors.SetSelection(idx)
+            idx = self.frame.list_themes.FindIndex(theme=conf.CurrentTheme)
+            if idx >= 0: self.frame.list_themes.SetSelection(idx)
             self.frame.cb_enabled.Disable()
             if not self.frame.Shown:
                 m = wx.adv.NotificationMessage(title=conf.Title,
@@ -432,8 +435,8 @@ class NightFall(wx.App):
             self.frame.cb_enabled.Enable()
 
         if "THEME APPLIED" in (topic, info):
-            idx = self.frame.combo_factors.FindIndex(factor=data)
-            if idx >= 0: self.frame.combo_factors.Select(idx)
+            idx = self.frame.combo_themes.FindIndex(theme=data)
+            if idx >= 0: self.frame.combo_themes.Select(idx)
 
 
     def set_tray_icon(self, icon):
@@ -441,31 +444,31 @@ class NightFall(wx.App):
         self.trayicon.SetIcon(icon, conf.TrayTooltip)
 
 
-    def on_change_stored_factor(self, event):
-        """Handler for selecting a stored factor, toggles buttons enabled."""
+    def on_select_list_theme(self, event):
+        """Handler for selecting a theme in list, toggles buttons enabled."""
         event.Skip()
-        selected = self.frame.list_factors.GetSelection()
-        self.frame.button_saved_apply.Enabled  = (selected >= 0)
-        self.frame.button_saved_delete.Enabled = (selected >= 0)
+        selected = self.frame.list_themes.GetSelection()
+        self.frame.button_apply.Enabled  = (selected >= 0)
+        self.frame.button_delete.Enabled = (selected >= 0)
 
 
-    def on_stored_factor(self, event=None):
-        """Applies the selected stored dimming factor."""
-        selected = self.frame.list_factors.GetSelection()
+    def on_apply_list_theme(self, event=None):
+        """Applies the colour theme selected in list."""
+        selected = self.frame.list_themes.GetSelection()
         if selected < 0: return
 
-        self.name_selected, factor = self.frame.list_factors.GetItemData(selected)
+        self.name_selected, theme = self.frame.list_themes.GetItemData(selected)
         if not self.dimmer.should_dim():
-            conf.DimmingEnabled = True
+            conf.ThemeEnabled = True
             self.frame.cb_enabled.Value = True
             self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
-        self.dimmer.set_factor(factor, "THEME APPLIED")
+        self.dimmer.set_theme(theme, "THEME APPLIED")
 
 
-    def on_save_factor(self, event=None):
+    def on_save_theme(self, event=None):
         """Stores the currently set rgb+brightness values."""
-        factor = conf.DimmingFactor
-        name0 = name = self.name_selected or get_factor_str(factor, short=True)
+        theme = conf.CurrentTheme
+        name0 = name = self.name_selected or get_theme_str(theme, short=True)
 
         self.frame_has_modal = True
         dlg = wx.TextEntryDialog(self.frame, "Name:", conf.Title,
@@ -478,14 +481,15 @@ class NightFall(wx.App):
         name = dlg.GetValue().strip()
         if not name: return
 
-        if factor == conf.StoredFactors.get(name): # No change
-            conf.UnsavedDimmingFactor = None
+        lst, cmb = self.frame.list_themes, self.frame.combo_themes
+        if theme == conf.Themes.get(name): # No change
+            conf.UnsavedTheme = None
             conf.save()
-            self.frame.combo_factors.Delete(0)
-            self.frame.combo_factors.Select(self.frame.combo_factors.FindIndex(name))
+            cmb.Delete(0)
+            cmb.Select(cmb.FindIndex(name=name))
             return
 
-        if name in conf.StoredFactors:
+        if name in conf.Themes:
             self.frame_has_modal = True
             resp = wx.MessageBox('Theme named "%s" already exists, '
                 'are you sure you want to overwrite it?' % name, conf.Title,
@@ -494,66 +498,65 @@ class NightFall(wx.App):
             self.frame_has_modal = False
             if wx.OK != resp: return
 
-        lst, cmb = self.frame.list_factors, self.frame.combo_factors
-        lst.RegisterBitmap(name, get_factor_bitmap(factor), factor)
-        if name in conf.StoredFactors:
-            cmb.ReplaceItem((name, factor), cmb.FindIndex(name=name))
+        lst.RegisterBitmap(name, get_theme_bitmap(theme), theme)
+        if name in conf.Themes:
+            cmb.ReplaceItem((name, theme), cmb.FindIndex(name=name))
             lst.Refresh() # @todo vt kas on vaja
         else:
             thumbs = [lst.GetItem(i) for i in range(lst.GetItemCount())]
             thumb = wx.lib.agw.thumbnailctrl.Thumb(self, folder="", filename=name, caption=name)
             thumbs.append(thumb)
             lst.ShowThumbs(thumbs, caption="")
-            choices = conf.StoredFactors.items()
-            cmb.SetItems(sorted(choices + [(name, factor)]))
+            choices = conf.Themes.items()
+            cmb.SetItems(sorted(choices + [(name, theme)]))
         cmb.Select(cmb.FindIndex(name=name))
         lst.SetSelection(lst.FindIndex(name=name))
-        conf.StoredFactors[name] = factor
-        conf.UnsavedDimmingFactor = None
+        conf.Themes[name] = theme
+        conf.UnsavedTheme = None
         conf.save()
 
 
-    def on_delete_factor(self, event=None):
-        """Deletes the stored factor, if confirmed."""
-        selected = self.frame.list_factors.GetSelection()
+    def on_delete_theme(self, event=None):
+        """Deletes the stored theme on confirm."""
+        selected = self.frame.list_themes.GetSelection()
         if selected < 0: return
 
-        name, factor = self.frame.list_factors.GetItemData(selected)
+        name, theme = self.frame.list_themes.GetItemData(selected)
         self.frame_has_modal = True
         resp = wx.MessageBox('Delete theme "%s"?' % name,
                              conf.Title, wx.OK | wx.CANCEL | wx.ICON_WARNING)
         self.frame_has_modal = False
         if wx.OK != resp: return
 
-        if name in conf.StoredFactors:
-            conf.StoredFactors.pop(name)
+        if name in conf.Themes:
+            conf.Themes.pop(name)
             conf.save()
-        self.frame.list_factors.UnregisterBitmap(name)
-        self.frame.list_factors.RemoveItemAt(selected)
-        self.frame.list_factors.Refresh()
-        if self.dimmer.should_dim() and factor == conf.DimmingFactor:
+        self.frame.list_themes.UnregisterBitmap(name)
+        self.frame.list_themes.RemoveItemAt(selected)
+        self.frame.list_themes.Refresh()
+        if self.dimmer.should_dim() and theme == conf.CurrentTheme:
             self.dimmer.toggle_dimming(False)
 
-        idx, idx2 = self.frame.combo_factors.FindIndex(name=name), -1
+        idx, idx2 = self.frame.combo_themes.FindIndex(name=name), -1
         if idx >= 0:
-            self.frame.combo_factors.Delete(idx)
-            idx2 = self.frame.combo_factors.Selection
+            self.frame.combo_themes.Delete(idx)
+            idx2 = self.frame.combo_themes.Selection
         if idx2 >= 0:
-            name2, factor2 = self.frame.combo_factors.GetItemData(idx2)
-            self.name_selected = name2 if name2 in conf.StoredFactors else None
-            conf.DimmingFactor = factor2
+            name2, theme2 = self.frame.combo_themes.GetItemData(idx2)
+            self.name_selected = name2 if name2 in conf.Themes else None
+            conf.CurrentTheme = theme2
 
 
     def on_open_tray_menu(self, event=None):
         """Creates and opens a popup menu for the tray icon."""
         menu = wx.Menu()
 
-        def on_stored_factor(name, factor, event):
+        def on_apply_theme(name, theme, event):
             if not self.dimmer.should_dim():
-                conf.DimmingEnabled = True
+                conf.ThemeEnabled = True
                 self.frame.cb_enabled.Value = True
                 self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
-            self.dimmer.set_factor(factor, "THEME APPLIED")
+            self.dimmer.set_theme(theme, "THEME APPLIED")
 
 
         is_dimming = self.dimmer.should_dim()
@@ -573,13 +576,13 @@ class NightFall(wx.App):
         menu.Bind(wx.EVT_MENU, self.on_toggle_startup, id=item.GetId())
         menu.AppendSeparator()
 
-        menu_factor = wx.Menu()
-        for name, factor in sorted(conf.StoredFactors.items()):
-            item = menu_factor.Append(-1, name, kind=wx.ITEM_CHECK)
-            item.Check(is_dimming and factor == conf.DimmingFactor)
-            handler = functools.partial(on_stored_factor, name, factor)
+        menu_themes = wx.Menu()
+        for name, theme in sorted(conf.Themes.items()):
+            item = menu_themes.Append(-1, name, kind=wx.ITEM_CHECK)
+            item.Check(is_dimming and theme == conf.CurrentTheme)
+            handler = functools.partial(on_apply_theme, name, theme)
             menu.Bind(wx.EVT_MENU, handler, id=item.GetId())
-        menu.Append(-1, "&Apply theme", menu_factor)
+        menu.Append(-1, "&Apply theme", menu_themes)
 
         item = wx.MenuItem(menu, -1, "&Options")
         item.Enable(not self.frame.Shown)
@@ -735,27 +738,27 @@ class NightFall(wx.App):
             self.frame.Raise()
 
 
-    def on_change_factor_detail(self, event):
-        """Handler for a change in screen factor properties."""
-        factor = []
-        for s in self.frame.sliders_factor:
+    def on_change_theme_detail(self, event):
+        """Handler for a change in colour theme properties."""
+        theme = []
+        for s in self.frame.sliders:
             new = isinstance(event, wx.ScrollEvent) and s is event.EventObject
             value = event.GetPosition() if new else s.GetValue()
-            factor.append(value)
-        self.dimmer.set_factor(factor, "THEME MODIFIED")
-        if conf.UnsavedDimmingFactor:
-            self.frame.combo_factors.ReplaceItem((" (unsaved) ", factor), 0)
+            theme.append(value)
+        self.dimmer.set_theme(theme, "THEME MODIFIED")
+        if conf.UnsavedTheme:
+            self.frame.combo_themes.ReplaceItem((" (unsaved) ", theme), 0)
         else:
-            self.frame.combo_factors.Insert((" (unsaved) ", factor), 0)
-        self.frame.combo_factors.Select(0)
-        conf.UnsavedDimmingFactor = factor
+            self.frame.combo_themes.Insert((" (unsaved) ", theme), 0)
+        self.frame.combo_themes.Select(0)
+        conf.UnsavedTheme = theme
 
 
-    def on_change_factor_combo(self, event):
-        """Handler for changing the factor combobox."""
-        name, factor = self.frame.combo_factors.GetItemData(event.Selection)
-        self.name_selected = name if name in conf.StoredFactors else None
-        self.dimmer.set_factor(factor, "THEME APPLIED")
+    def on_select_combo_theme(self, event):
+        """Handler for selecting an item in combobox."""
+        name, theme = self.frame.combo_themes.GetItemData(event.Selection)
+        self.name_selected = name if name in conf.Themes else None
+        self.dimmer.set_theme(theme, "THEME APPLIED")
 
 
     def on_toggle_dimming(self, event):
@@ -815,7 +818,7 @@ class NightFall(wx.App):
         sizer = panel.Sizer = wx.BoxSizer(wx.VERTICAL)
 
         cb_enabled = frame.cb_enabled = wx.CheckBox(panel, label="Dim now")
-        cb_enabled.SetValue(conf.DimmingEnabled)
+        cb_enabled.SetValue(conf.ThemeEnabled)
         cb_enabled.ToolTip = "Apply dimming settings now"
         sizer.Add(cb_enabled, border=5, flag=wx.ALL)
 
@@ -839,10 +842,10 @@ class NightFall(wx.App):
         panel_config.Sizer = wx.BoxSizer(wx.VERTICAL)
         ColourManager.Manage(panel_config, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         notebook.AddPage(panel_config, "Schedule ")
-        panel_factors = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
-        panel_factors.Sizer = wx.BoxSizer(wx.VERTICAL)
-        ColourManager.Manage(panel_factors, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
-        notebook.AddPage(panel_factors, "Saved themes ")
+        panel_themes = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
+        panel_themes.Sizer = wx.BoxSizer(wx.VERTICAL)
+        ColourManager.Manage(panel_themes, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
+        notebook.AddPage(panel_themes, "Saved themes ")
         panel_editor = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
         panel_editor.Sizer = wx.BoxSizer(wx.VERTICAL)
         ColourManager.Manage(panel_editor, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
@@ -858,19 +861,19 @@ class NightFall(wx.App):
         sizer_right = wx.BoxSizer(wx.VERTICAL)
         selector_time = frame.selector_time = ClockSelector(panel_config, selections=conf.Schedule)
         sizer_middle.Add(selector_time, proportion=1, border=5, flag=wx.GROW | wx.ALL)
-        frame.label_factor = wx.StaticText(panel_config, label="Colour theme:")
-        sizer_right.Add(frame.label_factor)
+        frame.label_combo = wx.StaticText(panel_config, label="Colour theme:")
+        sizer_right.Add(frame.label_combo)
 
-        choices = sorted(conf.StoredFactors.items())
-        if conf.UnsavedDimmingFactor:
-            choices.insert(0, (" (unsaved) ", conf.UnsavedDimmingFactor))
+        choices = sorted(conf.Themes.items())
+        if conf.UnsavedTheme:
+            choices.insert(0, (" (unsaved) ", conf.UnsavedTheme))
         selected = next((i for i, (a, b) in enumerate(choices)
-                         if b == conf.DimmingFactor), None)
-        combo_factors = frame.combo_factors = FactorComboBox(panel_config, 
+                         if b == conf.CurrentTheme), None)
+        combo_themes = frame.combo_themes = ThemeComboBox(panel_config, 
             choices=choices, selected=selected, 
-            bitmapsize=conf.FactorIconSize, style=wx.CB_READONLY)
-        combo_factors.SetPopupMaxHeight(200)
-        sizer_right.Add(combo_factors)
+            bitmapsize=conf.ThemeBitmapSize, style=wx.CB_READONLY)
+        combo_themes.SetPopupMaxHeight(200)
+        sizer_right.Add(combo_themes)
 
         label_error = frame.label_error = wx.StaticText(panel_config, style=wx.ALIGN_CENTER)
         ColourManager.Manage(label_error, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
@@ -888,31 +891,31 @@ class NightFall(wx.App):
         panel_config.Sizer.Add(sizer_middle, proportion=1, border=5, flag=wx.GROW | wx.ALL)
 
 
-        # Create saved factors page
-        list_factors = frame.list_factors = BitmapListCtrl(panel_factors, bitmapsize=conf.FactorIconSize)
-        ColourManager.Manage(list_factors, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
+        # Create saved themes page
+        list_themes = frame.list_themes = BitmapListCtrl(panel_themes, bitmapsize=conf.ThemeBitmapSize)
+        ColourManager.Manage(list_themes, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         thumbs = []
-        for name, factor in conf.StoredFactors.items():
-            bmp = get_factor_bitmap(factor)
-            list_factors.RegisterBitmap(name, bmp, factor)
-            thumbs.append(wx.lib.agw.thumbnailctrl.Thumb(list_factors, folder="",
+        for name, theme in conf.Themes.items():
+            bmp = get_theme_bitmap(theme)
+            list_themes.RegisterBitmap(name, bmp, theme)
+            thumbs.append(wx.lib.agw.thumbnailctrl.Thumb(list_themes, folder="",
                 filename=name, caption=name))
-        list_factors.ShowThumbs(thumbs, caption="")
-        idx = list_factors.FindIndex(factor=conf.DimmingFactor)
+        list_themes.ShowThumbs(thumbs, caption="")
+        idx = list_themes.FindIndex(theme=conf.CurrentTheme)
         if idx >= 0:
-            list_factors.SetSelection(idx)
-            self.name_selected = list_factors.GetItemName(idx)
+            list_themes.SetSelection(idx)
+            self.name_selected = list_themes.GetItemName(idx)
 
-        panel_factors.Sizer.Add(list_factors, border=5, proportion=1, flag=wx.TOP | wx.GROW)
-        panel_saved_buttons = wx.Panel(panel_factors)
+        panel_themes.Sizer.Add(list_themes, border=5, proportion=1, flag=wx.TOP | wx.GROW)
+        panel_saved_buttons = wx.Panel(panel_themes)
         panel_saved_buttons.Sizer = wx.BoxSizer(wx.HORIZONTAL)
-        panel_factors.Sizer.Add(panel_saved_buttons, border=5,
+        panel_themes.Sizer.Add(panel_saved_buttons, border=5,
                                      flag=wx.GROW | wx.ALL)
-        button_apply = frame.button_saved_apply = \
+        button_apply = frame.button_apply = \
             wx.Button(panel_saved_buttons, label="Apply theme")
-        button_delete = frame.button_saved_delete = \
+        button_delete = frame.button_delete = \
             wx.Button(panel_saved_buttons, label="Remove theme")
-        button_apply.Enabled = button_delete.Enabled = (list_factors.GetSelection() >= 0)
+        button_apply.Enabled = button_delete.Enabled = (list_themes.GetSelection() >= 0)
         panel_saved_buttons.Sizer.Add(button_apply)
         panel_saved_buttons.Sizer.AddStretchSpacer()
         panel_saved_buttons.Sizer.Add(button_delete)
@@ -931,7 +934,7 @@ class NightFall(wx.App):
 
         sizer_sliders = wx.FlexGridSizer(rows=4, cols=2, vgap=2, hgap=5)
         sizer_sliders.AddGrowableCol(1, proportion=1)
-        frame.sliders_factor = []
+        frame.sliders = []
         for i, text in enumerate(["brightness", "red", "green", "blue"]):
             bmp = wx.Bitmap(conf.ComponentIcons[text])
             sbmp = wx.StaticBitmap(panel_editor, bitmap=bmp)
@@ -939,18 +942,18 @@ class NightFall(wx.App):
             slider = wx.Slider(panel_editor,
                 minValue=conf.ValidColourRange[0]  if i else   0, # Brightness
                 maxValue=conf.ValidColourRange[-1] if i else 255, # goes 0..255
-                value=conf.DimmingFactor[i], size=(-1, 20)
+                value=conf.CurrentTheme[i], size=(-1, 20)
             )
             tooltip = "%s colour channel" % text.capitalize() if i else \
                       "Brightness (center is default, " \
                       "higher goes brighter than normal)"
             sbmp.ToolTip = tooltip
-            frame.sliders_factor.append(slider)
+            frame.sliders.append(slider)
             sizer_sliders.Add(slider, flag=wx.ALIGN_CENTER_VERTICAL | wx.GROW)
-        frame.sliders_factor.append(frame.sliders_factor.pop(0)) # Brightness is last
+        frame.sliders.append(frame.sliders.pop(0)) # Make brightness first
 
         frame.bmp_detail = wx.StaticBitmap(panel_editor,
-            bitmap=get_factor_bitmap(conf.DimmingFactor, border=True))
+            bitmap=get_theme_bitmap(conf.CurrentTheme, border=True))
         sizer_right.Add(frame.bmp_detail, border=5, flag=wx.TOP)
 
         button_save = frame.button_save = wx.Button(panel_editor, label="Save theme")
@@ -1018,7 +1021,7 @@ class NightFall(wx.App):
         self.frame_console.Bind(wx.EVT_CLOSE, lambda e: self.frame_console.Hide())
 
         icons = wx.IconBundle()
-        icons.AddIcon(wx.Icon(wx.Bitmap((conf.WindowIcon))))
+        icons.AddIcon(wx.Icon(wx.Bitmap(conf.WindowIcon)))
         frame.SetIcons(icons)
         frame.ToggleWindowStyle(wx.STAY_ON_TOP)
         panel_config.SetFocus()
@@ -1529,8 +1532,8 @@ class StartupService(object):
 
 
 
-class FactorComboBox(wx.adv.OwnerDrawnComboBox):
-    """Dropdown combobox for showing dimming factors."""
+class ThemeComboBox(wx.adv.OwnerDrawnComboBox):
+    """Dropdown combobox for showing colour themes."""
 
     COLOUR_NAME = "#7D7D7D"
 
@@ -1539,12 +1542,12 @@ class FactorComboBox(wx.adv.OwnerDrawnComboBox):
                  size=wx.DefaultSize, choices=(), selected=None,
                  bitmapsize=wx.DefaultSize, style=0, name=""):
         """
-        @param   choices  [(name, [factor]), ]
+        @param   choices  [(name, [theme]), ]
         """
         wx.adv.OwnerDrawnComboBox.__init__(self, parent, id=id, 
             pos=pos, size=size, choices=map(str, range(len(choices))), 
             style=style, name=name)
-        self._factors = list(choices)
+        self._themes = list(choices)
         w, h = bitmapsize[0], bitmapsize[1] + 15 # Room for name
         self._bitmapsize = wx.Size(w, h)
         thumbsz, bordersz = self.GetButtonSize(), self.GetWindowBorderSize()
@@ -1558,8 +1561,8 @@ class FactorComboBox(wx.adv.OwnerDrawnComboBox):
         if item == wx.NOT_FOUND:
             return # Painting the control, but no valid item selected yet
 
-        name, factor = self._factors[item]
-        bmp = get_factor_bitmap(factor)
+        name, theme = self._themes[item]
+        bmp = get_theme_bitmap(theme)
 
         dc.SetBackground(wx.Brush(ColourManager.GetColour(wx.SYS_COLOUR_WINDOW)))
         dc.Clear()
@@ -1580,57 +1583,52 @@ class FactorComboBox(wx.adv.OwnerDrawnComboBox):
 
 
     def GetItemName(self, index):
-        """Returns the name of dimming factor at index."""
-        return self._factors[index][0]
-
-
-    def GetItemFactor(self, index):
-        """Returns the dimming factor at index."""
-        return self._factors[index][1][:]
+        """Returns the name of colour theme at index."""
+        return self._themes[index][0]
 
 
     def GetItemData(self, index):
-        """Returns the name and dimming factor at index."""
-        return copy.deepcopy(self._factors[index])
+        """Returns the name and colour theme at index."""
+        return copy.deepcopy(self._themes[index])
 
 
-    def FindIndex(self, name=None, factor=None):
-        """Returns item index for the specified name or factor."""
+    def FindIndex(self, name=None, theme=None):
+        """Returns item index for the specified name or theme."""
         for i in range(self.GetCount()):
-            thumb_name, thumb_factor = self._factors[i]
-            if name   is not None and thumb_name   == name \
-            or factor is not None and thumb_factor == factor:
+            thumb_name, thumb_theme = self._themes[i]
+            if name   is not None and thumb_name  == name \
+            or theme  is not None and thumb_theme == theme:
                 return i
         return -1
 
 
     def Insert(self, item, pos):
         """Inserts an item at position."""
-        pos = min(pos, len(self._factors)) % len(self._factors)
-        self._factors.insert(pos, item)
-        super(FactorComboBox, self).Insert(str(len(self._factors)), pos)
+        pos = min(pos, len(self._themes)) % len(self._themes)
+        self._themes.insert(pos, item)
+        super(ThemeComboBox, self).Insert(str(len(self._themes)), pos)
 
 
     def ReplaceItem(self, item, pos):
         """Replaces item content at position."""
-        if not self._factors: return
-        pos = min(pos, len(self._factors)) % len(self._factors)
-        self._factors[pos] = item
+        if not self._themes: return
+        pos = min(pos, len(self._themes)) % len(self._themes)
+        self._themes[pos] = item
 
 
     def SetItems(self, items):
         """Replaces all items in control."""
-        self._factors = list(items)
-        return super(FactorComboBox, self).SetItems(map(str, range(len(items))))
+        self._themes = list(items)
+        return super(ThemeComboBox, self).SetItems(map(str, range(len(items))))
 
 
     def Delete(self, n):
         """Deletes the item with specified index."""
-        if not self._factors or n >= len(self._factors): return
-        if n < 0: n %= len(self._factors)
-        super(FactorComboBox, self).Delete(n)
-        del self._factors[n]
-        self.Select(min(n, len(self._factors) - 1))
+        if not self._themes or n >= len(self._themes): return
+        if n < 0: n %= len(self._themes)
+        super(ThemeComboBox, self).Delete(n)
+        del self._themes[n]
+        self.Select(min(n, len(self._themes) - 1))
 
 
     def Select(self, n):
@@ -1640,9 +1638,9 @@ class FactorComboBox(wx.adv.OwnerDrawnComboBox):
 
     def SetSelection(self, n):
         """Selects item with specified index."""
-        result = super(FactorComboBox, self).SetSelection(n)
-        if n < len(self._factors):
-            self.ToolTip = get_factor_str(self._factors[n][1])
+        result = super(ThemeComboBox, self).SetSelection(n)
+        if n < len(self._themes):
+            self.ToolTip = get_theme_str(self._themes[n][1])
         return result
     Selection = property(wx.adv.OwnerDrawnComboBox.GetSelection, SetSelection)
 
@@ -1674,41 +1672,30 @@ class BitmapListHandler(wx.lib.agw.thumbnailctrl.NativeImageHandler):
     Image loader for wx.lib.agw.thumbnailctrl.ThumbnailCtrl using
     pre-loaded bitmaps.
     """
-    _bitmaps = {} # {filename: wx.Bitmap, }
-    _factors = {} # {filename: [factor], }
+    _bitmaps = {} # {name: wx.Bitmap, }
+    _themes = {}  # {name: [theme], }
 
 
     @classmethod
-    def RegisterBitmap(cls, filename, bitmap, factor):
-        cls._bitmaps[filename] = bitmap
-        cls._factors[filename] = factor
+    def RegisterBitmap(cls, name, bitmap, theme):
+        cls._bitmaps[name], cls._themes[name] = bitmap, theme
 
 
     @classmethod
-    def UnregisterBitmap(cls, filename):
-        if filename in cls._bitmaps:
-            del cls._bitmaps[filename]
-        if filename in cls._factors:
-            del cls._factors[filename]
+    def UnregisterBitmap(cls, name):
+        cls._bitmaps.pop(name, None)
+        cls._themes .pop(name, None)
 
 
     @classmethod
-    def GetFactor(cls, filename):
-        return cls._factors[filename]
+    def GetTheme(cls, name):
+        return cls._themes[name]
 
 
     def LoadThumbnail(self, filename, thumbnailsize):
-        """
-        Load the image.
-
-        @param  filename  
-        :param `thumbnailsize`: the desired size of the thumbnail.
-        """
+        """Load the image, return (wx.Image, (w, h), hasAlpha)."""
         img = self._bitmaps[os.path.basename(filename)].ConvertToImage()
-
-        originalsize = (img.GetWidth(), img.GetHeight())
-        alpha = img.HasAlpha()
-        
+        originalsize, alpha = (img.GetWidth(), img.GetHeight()), img.HasAlpha()
         return img, originalsize, alpha
 
 
@@ -1746,47 +1733,43 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
         event.Skip()
 
 
-    def RegisterBitmap(self, filename, bitmap, factor):
-        BitmapListHandler.RegisterBitmap(filename, bitmap, factor)
+    def RegisterBitmap(self, filename, bitmap, theme):
+        BitmapListHandler.RegisterBitmap(filename, bitmap, theme)
 
 
     def UnregisterBitmap(self, filename):
         BitmapListHandler.UnregisterBitmap(filename)
 
 
-    def GetItemFactor(self, index):
-        """Returns the factor for the specified index."""
-        thumb = self.GetItem(index)
-        if thumb: return BitmapListHandler.GetFactor(thumb.GetFileName())
-
-
     def GetItemName(self, index):
-        """Returns the factor name for the specified index."""
+        """Returns the theme name for the specified index."""
         thumb = self.GetItem(index)
         if thumb: return thumb.GetFileName()
 
 
     def GetItemData(self, index):
-        """Returns (name, factor) for the specified index."""
+        """Returns (name, theme) for the specified index."""
         thumb = self.GetItem(index)
         if thumb:
-            return thumb.GetFileName(), BitmapListHandler.GetFactor(thumb.GetFileName())
+            return thumb.GetFileName(), BitmapListHandler.GetTheme(thumb.GetFileName())
 
 
-    def FindIndex(self, name=None, factor=None):
-        """Returns item index for the specified name or factor."""
+    def FindIndex(self, name=None, theme=None):
+        """Returns item index for the specified name or theme."""
         for i in range(self.GetItemCount()):
             thumb_name = self.GetItem(i).GetFileName()
             if name is not None and thumb_name == name \
-            or factor is not None \
-            and BitmapListHandler.GetFactor(thumb_name) == factor:
+            or theme is not None \
+            and BitmapListHandler.GetTheme(thumb_name) == theme:
                 return i
         return -1
 
 
     def _GetThumbInfo(self, index=-1):
         """Returns the thumbnail information for the specified index."""
-        if index >= 0: return get_factor_str(self.GetItemFactor(index))
+        thumb = self.GetItem(index)
+        if thumb:
+            return get_theme_str(BitmapListHandler.GetTheme(thumb.GetFileName()))
 
 
 
@@ -1862,20 +1845,20 @@ class ColourManager(object):
 
 
 
-def get_factor_bitmap(factor, supported=True, border=False):
+def get_theme_bitmap(theme, supported=True, border=False):
     """
-    Returns a wx.Bitmap for the specified factor, with colour and brightness
+    Returns a wx.Bitmap for the specified theme, with colour and brightness
     information as both text and visual.
     
-    @param   supported  whether the factor is supported by hardware
+    @param   supported  whether the theme is supported by hardware
     @param   border     whether to draw border around bitmap
     """
-    bmp = wx.Bitmap(*conf.FactorIconSize)
+    bmp = wx.Bitmap(*conf.ThemeBitmapSize)
     dc = wx.MemoryDC(bmp)
-    dc.SetBackground(wx.Brush(wx.Colour(*factor[:-1])))
-    dc.Clear() # Floodfill background with factor colour
+    dc.SetBackground(wx.Brush(wx.Colour(*theme[:-1])))
+    dc.Clear() # Floodfill background with theme colour
 
-    btext = "%d%%" % math.ceil(100 * (factor[-1] + 1) / conf.NormalBrightness)
+    btext = "%d%%" % math.ceil(100 * (theme[-1] + 1) / conf.NormalBrightness)
     dc.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
                        wx.FONTWEIGHT_BOLD, faceName="Tahoma"))
     twidth, theight = dc.GetTextExtent(btext)
@@ -1893,7 +1876,7 @@ def get_factor_bitmap(factor, supported=True, border=False):
     # Draw colour code on white background
     dc.SetFont(wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
                        wx.FONTWEIGHT_BOLD, faceName="Terminal"))
-    ctext = "#%2X%2X%2X" % tuple(factor[:-1])
+    ctext = "#%2X%2X%2X" % tuple(theme[:-1])
     cwidth, cheight = dc.GetTextExtent(ctext)
     dc.SetBrush(wx.WHITE_BRUSH)
     dc.SetPen(wx.WHITE_PEN)
@@ -1917,14 +1900,14 @@ def get_factor_bitmap(factor, supported=True, border=False):
     return bmp
 
 
-def get_factor_str(factor, supported=True, short=False):
-    """Returns a readable string representation of the factor."""
-    btext = "%d%%" % math.ceil(100 * (factor[-1] + 1) / conf.NormalBrightness)
+def get_theme_str(theme, supported=True, short=False):
+    """Returns a readable string representation of the theme."""
+    btext = "%d%%" % math.ceil(100 * (theme[-1] + 1) / conf.NormalBrightness)
     if short:
-        result = "%s #%2X%2X%2X" % ((btext, ) + tuple(factor[:3]))
+        result = "%s #%2X%2X%2X" % ((btext, ) + tuple(theme[:3]))
     else:
         result = "%s brightness.\n%s" % (btext,
-                 ", ".join("%s at %d%%" % (s, factor[i] / 255. * 100)
+                 ", ".join("%s at %d%%" % (s, theme[i] / 255. * 100)
                            for i, s in enumerate(("Red", "green", "blue"))))
         if not supported:
             result += "\n\nNot supported by hardware."
