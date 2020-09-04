@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev11"
+Version = "2.0.dev12"
 
 VersionDate = "04.09.2020"
 
@@ -65,8 +65,9 @@ ClockIcon = os.path.join(ResourceDirectory, "icon_48x48.png")
 """Size for theme bitmaps, as (w, h)."""
 ThemeBitmapSize = (80, 48)
 
-"""Window icon."""
-WindowIcon = os.path.join(ResourceDirectory, "icon.png")
+"""Application icons."""
+WindowIcons = [os.path.join(ResourceDirectory, "icon_{0}x{0}.png".format(x))
+               for x in (16, 32, 48)]
 
 """Icons for brigthness slider in theme editor."""
 BrightnessIcons = [os.path.join(ResourceDirectory, "brightness_lo.png"),

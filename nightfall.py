@@ -1028,13 +1028,14 @@ class NightFall(wx.App):
         frame.Position = (x2 - frame.Size.x, y2 - frame.Size.y)
 
         self.frame_console = wx.py.shell.ShellFrame(parent=frame,
-          title=u"%s Console" % conf.Title, size=(800, 300)
+          title="%s Console" % conf.Title, size=(800, 300)
         )
         self.frame_console.Bind(wx.EVT_CLOSE, lambda e: self.frame_console.Hide())
 
         icons = wx.IconBundle()
-        icons.AddIcon(wx.Icon(wx.Bitmap(conf.WindowIcon)))
+        for p in conf.WindowIcons: icons.AddIcon(wx.Icon(p))
         frame.SetIcons(icons)
+        self.frame_console.SetIcons(icons)
         frame.ToggleWindowStyle(wx.STAY_ON_TOP)
         panel_config.SetFocus()
         return frame
