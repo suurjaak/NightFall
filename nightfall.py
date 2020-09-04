@@ -68,7 +68,7 @@ class Dimmer(object):
 
         def is_valid(factor):
             if not isinstance(factor, (list, tuple)) \
-            or len(factor) != len(conf.DefaultDimmingFactor): return False
+            or len(factor) != len(conf.Defaults["DimmingFactor"]): return False
             for g in factor[:-1]:
                 if not isinstance(g, (int, float)) \
                 or not (conf.ValidColourRange[0] <= g <= conf.ValidColourRange[-1]):
@@ -76,7 +76,7 @@ class Dimmer(object):
             return 0 <= factor[-1] <= 255
 
         if not is_valid(conf.DimmingFactor):
-            conf.DimmingFactor = conf.DefaultDimmingFactor[:]
+            conf.DimmingFactor = conf.Defaults["DimmingFactor"]
         if not isinstance(conf.StoredFactors, dict):
             conf.StoredFactors = conf.DefaultStoredFactors.copy()
 

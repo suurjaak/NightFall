@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev6"
+Version = "2.0.dev7"
 
 VersionDate = "04.09.2020"
 
@@ -133,9 +133,6 @@ and brightness, ranging from 0..255 (brightness at 128 is 100%, lower is darker)
 """
 DimmingFactor = [255, 211, 176,  57]
 
-"""Default gamma coefficients for dimmed display."""
-DefaultDimmingFactor = [255, 189, 189, 82]
-
 """Gamma coefficients for normal display."""
 NormalDimmingFactor = [255, 255, 255, 128]
 
@@ -210,7 +207,7 @@ def load():
 
     section = "*"
     module = sys.modules[__name__]
-    Defaults.update({k: getattr(module, k) for k in OptionalFileDirectives
+    Defaults.update({k: getattr(module, k) for k in FileDirectives + OptionalFileDirectives
                      if hasattr(module, k)}) if not Defaults else None
 
     parser = RawConfigParser()
