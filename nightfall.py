@@ -931,13 +931,16 @@ class NightFall(wx.App):
         sizer_bar = wx.BoxSizer(wx.HORIZONTAL)
         sizer_right = wx.BoxSizer(wx.VERTICAL)
 
-        sizer_sliders = wx.FlexGridSizer(rows=4, cols=2, vgap=2, hgap=5)
+        sizer_sliders = wx.FlexGridSizer(rows=4, cols=3, vgap=2, hgap=5)
         sizer_sliders.AddGrowableCol(1, proportion=1)
         frame.sliders = []
+        kws = dict(red=0, green=0, blue=0)
         for i, text in enumerate(["brightness", "red", "green", "blue"]):
-            bmp = wx.Bitmap(conf.ComponentIcons[text])
-            sbmp = wx.StaticBitmap(panel_editor, bitmap=bmp)
-            sizer_sliders.Add(sbmp, flag=wx.ALIGN_CENTER)
+            if i: bmp1, bmp2 = [get_colour_bitmap(wx.Colour(**dict(kws, **{text: x})))
+                                for x in conf.ValidColourRange]
+            else: bmp1, bmp2 = map(wx.Bitmap,         conf.BrightnessIcons)
+            sbmp1 = wx.StaticBitmap(panel_editor, bitmap=bmp1)
+            sbmp2 = wx.StaticBitmap(panel_editor, bitmap=bmp2)
             slider = wx.Slider(panel_editor,
                 minValue=conf.ValidColourRange[0]  if i else   0, # Brightness
                 maxValue=conf.ValidColourRange[-1] if i else 255, # goes 0..255
@@ -946,9 +949,11 @@ class NightFall(wx.App):
             tooltip = "%s colour channel" % text.capitalize() if i else \
                       "Brightness (center is default, " \
                       "higher goes brighter than normal)"
-            sbmp.ToolTip = tooltip
-            frame.sliders.append(slider)
+            sbmp1.ToolTip = sbmp2.ToolTip = tooltip
+            sizer_sliders.Add(sbmp1,  flag=wx.ALIGN_CENTER)
             sizer_sliders.Add(slider, flag=wx.ALIGN_CENTER_VERTICAL | wx.GROW)
+            sizer_sliders.Add(sbmp2,  flag=wx.ALIGN_CENTER)
+            frame.sliders.append(slider)
         frame.sliders.append(frame.sliders.pop(0)) # Make brightness first
 
         frame.bmp_detail = wx.StaticBitmap(panel_editor,
@@ -1917,6 +1922,25 @@ def get_theme_str(theme, supported=True, short=False):
         if not supported:
             result += "\n\nNot supported by hardware."
     return result
+
+
+def get_colour_bitmap(colour, size=(16, 16)):
+    """Returns a wx.Bitmap full of specified colour."""
+    bmp = wx.Bitmap(*size)
+    dc = wx.MemoryDC(bmp)
+    dc.SetBackground(wx.BLACK_BRUSH)
+    dc.Clear()
+
+    dc.Brush, dc.Pen = wx.Brush(colour), wx.Pen(colour)
+    dc.DrawRectangle(1, 1, size[0] - 2, size[1] - 2)
+
+    pts = (1, 1), (1, size[1] - 2), (size[0] - 2, 1), (size[0] - 2, size[1] - 2)
+    dc.SetPen(wx.BLACK_PEN)
+    dc.DrawPointList(pts)
+
+    del dc
+    bmp.SetMaskColour(wx.BLACK)
+    return bmp
 
 
 

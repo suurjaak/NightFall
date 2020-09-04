@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev8"
+Version = "2.0.dev9"
 
 VersionDate = "04.09.2020"
 
@@ -68,9 +68,9 @@ ThemeBitmapSize = (80, 48)
 """Window icon."""
 WindowIcon = os.path.join(ResourceDirectory, "icon.png")
 
-"""Icons for gamma component labels in theme editor."""
-ComponentIcons = {x: os.path.join(ResourceDirectory, "%s.png" % x)
-                  for x in ["brightness", "red", "green", "blue"]}
+"""Icons for brigthness slider in theme editor."""
+BrightnessIcons = [os.path.join(ResourceDirectory, "brightness_lo.png"),
+                   os.path.join(ResourceDirectory, "brightness_hi.png")]
 
 """Number of milliseconds before settings window is hidden on losing focus."""
 WindowTimeout = 30000
