@@ -384,6 +384,7 @@ class NightFall(wx.App):
         if "THEME CHANGED" == topic:
             for i, g in enumerate(data):
                 self.frame.sliders[i].SetValue(g)
+                self.frame.sliders[i].ToolTip = str(g)
             bmp, tooltip = get_theme_bitmap(data, border=True), get_theme_str(data)
             for b in [self.frame.bmp_detail]: b.Bitmap, b.ToolTip = bmp, tooltip
             self.frame.label_error.Hide()
@@ -743,6 +744,7 @@ class NightFall(wx.App):
         for s in self.frame.sliders:
             new = isinstance(event, wx.ScrollEvent) and s is event.EventObject
             value = event.GetPosition() if new else s.GetValue()
+            s.ToolTip = str(value)
             theme.append(value)
         self.dimmer.set_theme(theme, "THEME MODIFIED")
         if conf.UnsavedTheme:
@@ -946,6 +948,7 @@ class NightFall(wx.App):
                 maxValue=conf.ValidColourRange[-1] if i else 255, # goes 0..255
                 value=conf.CurrentTheme[i], size=(-1, 20)
             )
+            slider.ToolTip = str(slider.Value)
             tooltip = "%s colour channel" % text.capitalize() if i else \
                       "Brightness (center is default, " \
                       "higher goes brighter than normal)"
