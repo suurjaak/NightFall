@@ -2,9 +2,7 @@
 """
 Functionality for handling screen device gamma ramps.
 
-Accessing gamma ramp functionality partly from PsychoPy by Jonathan Peirce,
-formatting Windows errors from Windows Routines, by Jason R. Coombs, both
-released under compatible open source licences.
+Accessing gamma ramp functionality on the basis of PsychoPy 1.75 by Jonathan Peirce.
 
 @author      Erki Suurjaak
 @created     15.10.2012
@@ -103,8 +101,7 @@ def set_gamma_ramp(ramp):
         success = ctypes.windll.gdi32.SetDeviceGammaRamp(device, ramp_c)
         if not success:
             code = ctypes.windll.kernel32.GetLastError()
-            errormsg = format_windows_system_message(code).strip()
-            msg = "SetDeviceGammaRamp failed: %s [error %s]" % (errormsg, code)
+            msg = "SetDeviceGammaRamp failed [error %s]" % code
             raise Exception(msg)
     elif "darwin" == sys.platform:
         error = carbon.CGSetDisplayTransferByTable(device, len(ramp_c[0]),
@@ -117,74 +114,3 @@ def set_gamma_ramp(ramp):
                     ramp_c[0], ramp_c[1], ramp_c[2])
         if not success:
             raise Exception("XF86VidModeSetGammaRamp failed")
-
-
-def get_gamma_ramp():
-    """
-    Returns the current hardware look-up table, using platform-specific ctypes
-    functions.
-    
-    @return   a 3x256 or 3x1024 list of values within 0..65535
-    """
-    device = get_screen_device()
-
-    # Initialize platform-specific ramp structure for system call
-    type_c = ctypes.c_float if "darwin" == sys.platform else ctypes.c_uint16
-    ramp_c = ((type_c * 256) * 3)()
-
-    if "win32" == sys.platform:
-        success = ctypes.windll.gdi32.GetDeviceGammaRamp(device, ramp_c)
-        if not success:
-            code = ctypes.windll.kernel32.GetLastError()
-            errormsg = format_windows_system_message(code).strip()
-            msg = "GetDeviceGammaRamp failed: %s [error %s]" % (errormsg, code)
-            raise Exception(msg)
-    elif "darwin" == sys.platform:
-        error = carbon.CGGetDisplayTransferByTable(device, len(ramp_c[0]),
-                     ramp_c[0], ramp_c[1], ramp_c[2], (ctypes.c_int * 1)())
-        if error:
-            msg = "CGGetDisplayTransferByTable failed [error %s]" % error
-            raise Exception(msg)
-    elif sys.platform.startswith("linux"):
-        success = xf86vm.XF86VidModeGetGammaRamp(device, 0, len(ramp_c[0]),
-                      ramp_c[0], ramp_c[1], ramp_c[2])
-        if not success:
-            raise Exception("XF86VidModeGetGammaRamp failed")
-
-    ramp = [ramp_c[0][:], ramp_c[1][:], ramp_c[2][:]]
-    return ramp
-
-
-def format_windows_system_message(errno):
-    """
-    Call FormatMessage with a system error number to retrieve
-    the descriptive error message.
-    """
-    # first some flags used by FormatMessageW
-    ALLOCATE_BUFFER = 0x100
-    ARGUMENT_ARRAY = 0x2000
-    FROM_HMODULE = 0x800
-    FROM_STRING = 0x400
-    FROM_SYSTEM = 0x1000
-    IGNORE_INSERTS = 0x200
-
-    # Let FormatMessageW allocate the buffer (we'll free it below)
-    # Also, let it know we want a system error message.
-    flags = ALLOCATE_BUFFER | FROM_SYSTEM
-    source = None
-    message_id = errno
-    language_id = 0
-    result_buffer = ctypes.wintypes.LPWSTR()
-    buffer_size = 0
-    arguments = None
-    bytes = ctypes.windll.kernel32.FormatMessageW(flags, source, message_id,
-        language_id, ctypes.byref(result_buffer), buffer_size, arguments,
-    )
-    # Note the following will cause an infinite loop if GetLastError
-    # repeatedly returns an error that cannot be formatted, although
-    # this should not happen.
-    if bytes == 0:
-        raise WindowsError()
-    message = result_buffer.value
-    ctypes.windll.kernel32.LocalFree(result_buffer)
-    return message

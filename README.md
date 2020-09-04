@@ -37,11 +37,8 @@ If running as a Python script, NightFall requires Python 2.7 and wxPython
 Attribution
 -----------
 
-NightFall includes bits of code in gamma.py from PsychoPy 1.75
-(https://github.com/psychopy/psychopy), released under the
-compatible GNU General Public License v3; 
-and from Windows Routines 2.2.1 by Jason R. Coombs,
-(https://github.com/jaraco/jaraco.windows), released under the MIT License.
+Includes several icons from Fugue Icons,
+(c) 2010 Yusuke Kamiyamane, https://p.yusukekamiyamane.com.
 
 Windows binaries built with PyInstaller (https://www.pyinstaller.org).
 
