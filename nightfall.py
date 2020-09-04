@@ -354,6 +354,7 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_CLOSE,      self.on_toggle_settings)
         frame.Bind(wx.EVT_ACTIVATE,   self.on_activate_settings)
         frame.Bind(wx.EVT_MOVE,       self.on_move)
+        frame.Bind(wx.EVT_CHAR_HOOK,  self.on_key)
         for s in frame.sliders:
             frame.Bind(wx.EVT_SCROLL, self.on_change_theme_detail, s)
             frame.Bind(wx.EVT_SLIDER, self.on_change_theme_detail, s)
@@ -692,6 +693,13 @@ class NightFall(wx.App):
         self.frame_move_ignore = False
 
 
+    def on_key(self, event):
+        """Handler for keypress, hides window on pressing Escape."""
+        event.Skip()
+        if not event.HasModifiers() and wx.WXK_ESCAPE == event.KeyCode:
+            self.on_toggle_settings()
+
+
     def on_toggle_settings(self, event=None):
         """Handler for clicking to toggle settings window visible/hidden."""
         if self.frame_has_modal: return
@@ -811,7 +819,7 @@ class NightFall(wx.App):
 
     def create_frame(self):
         """Creates and returns the settings window."""
-        frame = wx.Frame(parent=None, title=conf.Title, size=conf.WindowSize,
+        frame = wx.Dialog(parent=None, title=conf.Title, size=conf.WindowSize,
             style=wx.CAPTION | wx.SYSTEM_MENU | wx.CLOSE_BOX | wx.STAY_ON_TOP
         )
 
@@ -1002,16 +1010,13 @@ class NightFall(wx.App):
         frame.button_exit = wx.lib.agw.gradientbutton.GradientButton(
             panel_buttons, label="Exit program", size=(100, -1))
         for b in (frame.button_ok, frame.button_exit):
-            bold_font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-            bold_font.SetWeight(wx.BOLD)
-            b.SetFont(bold_font)
+            b.Font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).Bold()
             b.SetTopStartColour(wx.Colour(96, 96, 96))
             b.SetTopEndColour(wx.Colour(112, 112, 112))
             b.SetBottomStartColour(b.GetTopEndColour())
             b.SetBottomEndColour(wx.Colour(160, 160, 160))
             b.SetPressedTopColour(wx.Colour(160, 160, 160))
             b.SetPressedBottomColour(wx.Colour(160, 160, 160))
-        frame.button_ok.SetDefault()
         frame.button_ok.SetToolTip("Minimize window to tray [Escape]")
         panel_buttons.Sizer.Add(frame.button_ok, border=5, flag=wx.TOP)
         panel_buttons.Sizer.AddStretchSpacer()
