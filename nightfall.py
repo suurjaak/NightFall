@@ -843,11 +843,11 @@ class NightFall(wx.App):
         panel_factors = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
         panel_factors.Sizer = wx.BoxSizer(wx.VERTICAL)
         ColourManager.Manage(panel_factors, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
-        notebook.AddPage(panel_factors, "Themes ")
-        panel_expert = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
-        panel_expert.Sizer = wx.BoxSizer(wx.VERTICAL)
-        ColourManager.Manage(panel_expert, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
-        notebook.AddPage(panel_expert, "Expert settings ")
+        notebook.AddPage(panel_factors, "Saved themes ")
+        panel_editor = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
+        panel_editor.Sizer = wx.BoxSizer(wx.VERTICAL)
+        ColourManager.Manage(panel_editor, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
+        notebook.AddPage(panel_editor, "Theme editor ")
         panel_about = wx.Panel(notebook, style=wx.BORDER_NONE)
         panel_about.Sizer = wx.BoxSizer(wx.VERTICAL)
         notebook.AddPage(panel_about, "About ")
@@ -919,13 +919,13 @@ class NightFall(wx.App):
         panel_saved_buttons.Sizer.Add(button_delete)
 
 
-        # Create expert settings page, with RGB sliders and color sample panel
-        text_detail = wx.StaticText(panel_expert,
-            style=wx.ALIGN_CENTER, label=conf.InfoDetailedText)
+        # Create theme editor page, with RGB sliders and color sample panel
+        text_detail = wx.StaticText(panel_editor,
+            style=wx.ALIGN_CENTER, label=conf.InfoEditorText)
         ColourManager.Manage(text_detail, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
-        panel_expert.Sizer.Add(text_detail, border=5,
+        panel_editor.Sizer.Add(text_detail, border=5,
             flag=wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
-        panel_expert.Sizer.AddStretchSpacer()
+        panel_editor.Sizer.AddStretchSpacer()
 
         sizer_bar = wx.BoxSizer(wx.HORIZONTAL)
         sizer_right = wx.BoxSizer(wx.VERTICAL)
@@ -935,9 +935,9 @@ class NightFall(wx.App):
         frame.sliders_factor = []
         for i, text in enumerate(["brightness", "red", "green", "blue"]):
             bmp = wx.Bitmap(conf.ComponentIcons[text])
-            sbmp = wx.StaticBitmap(panel_expert, bitmap=bmp)
+            sbmp = wx.StaticBitmap(panel_editor, bitmap=bmp)
             sizer_sliders.Add(sbmp, flag=wx.ALIGN_CENTER)
-            slider = wx.Slider(panel_expert,
+            slider = wx.Slider(panel_editor,
                 minValue=conf.ValidColourRange[0]  if i else   0, # Brightness
                 maxValue=conf.ValidColourRange[-1] if i else 255, # goes 0..255
                 value=conf.DimmingFactor[i], size=(-1, 20)
@@ -950,16 +950,16 @@ class NightFall(wx.App):
             sizer_sliders.Add(slider, flag=wx.ALIGN_CENTER_VERTICAL | wx.GROW)
         frame.sliders_factor.append(frame.sliders_factor.pop(0)) # Brightness is last
 
-        frame.bmp_detail = wx.StaticBitmap(panel_expert,
+        frame.bmp_detail = wx.StaticBitmap(panel_editor,
             bitmap=get_factor_bitmap(conf.DimmingFactor, border=True))
         sizer_right.Add(frame.bmp_detail, border=5, flag=wx.TOP)
 
-        button_save = frame.button_save = wx.Button(panel_expert, label="Save theme")
+        button_save = frame.button_save = wx.Button(panel_editor, label="Save theme")
         sizer_right.Add(button_save, border=5, flag=wx.TOP | wx.GROW)
 
         sizer_bar.Add(sizer_sliders, border=10, proportion=1, flag=wx.LEFT | wx.GROW)
         sizer_bar.Add(sizer_right, border=5, flag=wx.ALL | wx.GROW)
-        panel_expert.Sizer.Add(sizer_bar, proportion=1, flag=wx.GROW)
+        panel_editor.Sizer.Add(sizer_bar, proportion=1, flag=wx.GROW)
 
         # Create About-page
         label_about = frame.label_about = wx.html.HtmlWindow(panel_about)

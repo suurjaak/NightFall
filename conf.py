@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev4"
+Version = "2.0.dev5"
 
 VersionDate = "03.09.2020"
 
@@ -71,7 +71,7 @@ FactorIconSize = (80, 48)
 """Window icon."""
 SettingsFrameIcon = os.path.join(ResourceDirectory, "icon.png")
 
-"""Icons for gamma component labels under expert settings."""
+"""Icons for gamma component labels in theme editor."""
 ComponentIcons = {x: os.path.join(ResourceDirectory, "%s.png" % x)
                   for x in ["brightness", "red", "green", "blue"]}
 
@@ -139,7 +139,7 @@ DefaultDimmingFactor = [255, 189, 189, 82]
 """Gamma coefficients for normal display."""
 NormalDimmingFactor = [255, 255, 255, 128]
 
-"""Gamma coefficients being edited in expert settings."""
+"""Gamma coefficients being edited in theme editor."""
 UnsavedDimmingFactor = None
 
 """Screen brightness for normal display."""
@@ -167,8 +167,8 @@ The default dimming schedule, [1,0,..] per each quarter hour
 """
 DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
 
-"""Information text shown on expert settings page."""
-InfoDetailedText = (
+"""Information text shown on theme editor page."""
+InfoEditorText = (
     "Fine-tune the individual factors that make up the display: brightness \n"
     "(ranges from dark to superbright) and red-green-blue colour channels.\n\n"
     "A lot of the darker ranges will not be accepted by the graphics hardware."
