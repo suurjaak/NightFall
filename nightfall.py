@@ -13,6 +13,7 @@ import datetime
 import functools
 import math
 import os
+import re
 import sys
 import warnings
 import webbrowser
@@ -158,10 +159,13 @@ class Dimmer(object):
         """
         if not conf.ScheduleEnabled or conf.ManualEnabled: return
 
+        if conf.SuspendedStart and conf.SuspendedStart <= datetime.datetime.now():
+            conf.SuspendedStart = None
         theme, msg = conf.NormalTheme, "NORMAL DISPLAY"
         if self.should_dim_scheduled():
-            theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-            msg = "SCHEDULE IN EFFECT"
+            if not conf.SuspendedStart:
+                theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
+                msg = "SCHEDULE IN EFFECT"
         if theme != self.current_theme:
             self.apply_theme(theme, fade=True)
             self.post_event(msg)
@@ -188,6 +192,7 @@ class Dimmer(object):
         changed = (enabled != conf.ScheduleEnabled)
         if not changed: return
 
+        if not enabled: conf.SuspendedStart = None
         conf.ScheduleEnabled = enabled
         self.post_event("SCHEDULE TOGGLED", conf.ScheduleEnabled)
         conf.save()
@@ -201,13 +206,30 @@ class Dimmer(object):
 
 
     def toggle_startup(self, enabled):
-        """Toggles running NightFall on system startup."""
+        """Toggles running program on system startup."""
         enabled = bool(enabled)
         if StartupService.can_start():
             conf.StartupEnabled = enabled
             conf.save()
             StartupService.start() if enabled else StartupService.stop()
             self.post_event("STARTUP TOGGLED", conf.StartupEnabled)
+
+
+    def toggle_suspend(self, enabled):
+        """Toggles schedule postponement on/off."""
+        enabled = bool(enabled)
+        changed = (enabled != bool(conf.SuspendedStart))
+        if not changed or not self.should_dim_scheduled(): return
+
+        if enabled:
+            delay = datetime.timedelta(minutes=conf.SuspendInterval)
+            start, msg = datetime.datetime.now() + delay, "NORMAL DISPLAY"
+            theme = conf.NormalTheme
+        else:
+            start, msg = None, "SCHEDULE IN EFFECT"
+            theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
+        conf.SuspendedStart = start
+        self.apply_theme(theme, msg, fade=True)
 
 
     def apply_theme(self, theme, info=None, fade=False):
@@ -247,13 +269,15 @@ class Dimmer(object):
         """
         Sets the current screen dimming schedule, and applies it if suitable.
 
-        @param   selections  selected times, [1,0,..] per each hour
+        @param   selections  selected times, [1,0,..] per each quarter hour
         """
         changed = (schedule != conf.Schedule)
         if not changed: return
 
         did_dim_scheduled = self.should_dim_scheduled()
         conf.Schedule = schedule[:]
+        if did_dim_scheduled and not self.should_dim_scheduled():
+            conf.SuspendedStart = None
         conf.save()
         self.post_event("SCHEDULE CHANGED", conf.Schedule)
         if did_dim_scheduled and self.should_dim_scheduled(): return
@@ -288,13 +312,16 @@ class Dimmer(object):
     def should_dim(self):
         """
         Returns whether dimming should currently be applied, based on global
-        enabled flag and enabled time selection.
+        enabled flag and enabled time selection. Disregards suspended state.
         """
         return conf.ManualEnabled or self.should_dim_scheduled()
 
 
     def should_dim_scheduled(self, flag=False):
-        """Whether dimming should currently be on, according to schedule."""
+        """
+        Whether dimming should currently be on, according to schedule.
+        Disregards suspended state.
+        """
         result = False
         if conf.ScheduleEnabled or flag:
             t = datetime.datetime.now().time()
@@ -376,6 +403,7 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_BUTTON,     self.on_restore_themes,     frame.button_restore)
         frame.Bind(wx.EVT_BUTTON,     self.on_delete_theme,       frame.button_delete)
         frame.Bind(wx.EVT_BUTTON,     self.on_save_theme,         frame.button_save)
+        frame.Bind(wx.EVT_BUTTON,     self.on_toggle_suspend,     frame.button_suspend)
         frame.Bind(wx.EVT_COMBOBOX,   self.on_select_combo_theme, frame.combo_themes)
         frame.link_www.Bind(wx.html.EVT_HTML_LINK_CLICKED,
                             lambda e: webbrowser.open(e.GetLinkInfo().Href))
@@ -436,6 +464,7 @@ class NightFall(wx.App):
         elif "MANUAL TOGGLED" == topic:
             self.frame.cb_enabled.Value = data
             self.set_tray_icon(self.TRAYICONS[data][conf.ScheduleEnabled])
+            if data: self.frame.button_suspend.Hide()
         elif "SCHEDULE TOGGLED" == topic:
             self.frame.cb_schedule.Value = data
             self.set_tray_icon(self.TRAYICONS[self.dimmer.should_dim()][data])
@@ -450,6 +479,10 @@ class NightFall(wx.App):
                 if self.trayicon.IsAvailable(): m.UseTaskBarIcon(self.trayicon)
                 m.Show()
             if conf.ManualEnabled: self.dimmer.toggle_manual(False)
+            self.frame.button_suspend.Label   = conf.SuspendOnLabel
+            self.frame.button_suspend.ToolTip = conf.SuspendOnToolTip
+            self.frame.button_suspend.Show()
+            self.frame.button_suspend.ContainingSizer.Layout()
         elif "STARTUP TOGGLED" == topic:
             self.frame.cb_startup.Value = data
         elif "STARTUP POSSIBLE" == topic:
@@ -458,7 +491,8 @@ class NightFall(wx.App):
             self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
         elif "NORMAL DISPLAY" == topic:
             self.set_tray_icon(self.TRAYICONS[False][conf.ScheduleEnabled])
-            self.frame.cb_enabled.Enable()
+            if not conf.SuspendedStart:
+                self.frame.cb_enabled.Enable(); self.frame.button_suspend.Hide()
 
         if "THEME APPLIED" in (topic, info):
             idx = self.frame.combo_themes.FindItem(conf.ThemeName or conf.UnsavedLabel)
@@ -489,6 +523,7 @@ class NightFall(wx.App):
         name = self.frame.list_themes.GetItemValue(selected)
         self.name_selected = conf.ThemeName = name
         if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
+        conf.SuspendedStart = None
         self.dimmer.set_theme(conf.Themes[name], "THEME APPLIED")
 
 
@@ -498,7 +533,6 @@ class NightFall(wx.App):
         theme = conf.Themes.get(name, conf.UnsavedTheme)
         conf.ThemeName = name if name != conf.UnsavedLabel else None
         self.name_selected = conf.ThemeName
-        # @todo kas siin on vaja APPLIED?
         self.dimmer.set_theme(theme, "THEME APPLIED")
 
 
@@ -626,6 +660,12 @@ class NightFall(wx.App):
         item = menu.Append(-1, "Apply on &schedule", kind=wx.ITEM_CHECK)
         item.Check(conf.ScheduleEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
+        if conf.ScheduleEnabled:
+            label = conf.SuspendOnLabel.strip().replace("u", "&u", 1)
+            label = re.sub("\s+", " ", label)
+            item = menu.Append(-1, label, kind=wx.ITEM_CHECK)
+            item.Check(bool(conf.SuspendedStart))
+            menu.Bind(wx.EVT_MENU, self.on_toggle_suspend, id=item.GetId())
         item = menu.Append(-1, "&Run at startup", kind=wx.ITEM_CHECK)
         item.Check(conf.StartupEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_startup, id=item.GetId())
@@ -648,7 +688,7 @@ class NightFall(wx.App):
         item.Enable(not self.frame.Shown)
         menu.Bind(wx.EVT_MENU, self.on_toggle_settings, id=item.GetId())
         menu.Append(item)
-        item = wx.MenuItem(menu, -1, "E&xit NightFall")
+        item = wx.MenuItem(menu, -1, "E&xit %s" % conf.Title)
         menu.Bind(wx.EVT_MENU, self.on_exit, id=item.GetId())
         menu.Append(item)
 
@@ -805,6 +845,18 @@ class NightFall(wx.App):
             self.frame.Raise()
 
 
+    def on_toggle_suspend(self, event=None):
+        """Handler for toggling schedule suspension on/off."""
+        if conf.SuspendedStart:
+            label, tooltip = conf.SuspendOnLabel, conf.SuspendOnToolTip
+        else:
+            label, tooltip = conf.SuspendOffLabel, conf.SuspendOffToolTip
+        self.frame.button_suspend.Label   = label
+        self.frame.button_suspend.ToolTip = tooltip
+        self.frame.button_suspend.ContainingSizer.Layout()
+        self.dimmer.toggle_suspend(conf.SuspendedStart is None)
+
+
     def on_change_theme_detail(self, event):
         """Handler for a change in colour theme properties."""
         theme = []
@@ -821,6 +873,7 @@ class NightFall(wx.App):
         self.frame.combo_themes.SetSelection(0)
         self.frame.combo_themes.ToolTip = get_theme_str(theme)
         conf.UnsavedTheme = theme
+        conf.SuspendedStart = None
         self.dimmer.set_theme(theme, "THEME MODIFIED")
 
 
@@ -937,11 +990,16 @@ class NightFall(wx.App):
         sizer_right.Add(label_error, border=10, flag=wx.TOP | wx.BOTTOM)
         sizer_right.AddStretchSpacer()
 
+        frame.button_suspend = wx.Button(panel_config, label=conf.SuspendOnLabel)
+        frame.button_suspend.ToolTip = conf.SuspendOnToolTip
+        if "\n" in conf.SuspendOnLabel: frame.button_suspend.MinSize = (-1, 35)
+        frame.button_suspend.Hide()
         cb_schedule = frame.cb_schedule = wx.CheckBox(panel_config, label="Apply on schedule")
         cb_schedule.ToolTip = "Apply automatically during the highlighted hours"
-        sizer_right.Add(cb_schedule, border=5, flag=wx.ALL)
         cb_startup = frame.cb_startup = wx.CheckBox(panel_config, label="Run at startup")
-        cb_startup.ToolTip = "Adds NightFall to startup programs"
+        cb_startup.ToolTip = "Adds %s to startup programs" % conf.Title
+        sizer_right.Add(frame.button_suspend, border=5, flag=wx.ALL ^ wx.BOTTOM | wx.GROW)
+        sizer_right.Add(cb_schedule, border=5, flag=wx.ALL)
         sizer_right.Add(cb_startup, border=5, flag=wx.LEFT)
 
         sizer_middle.Add(sizer_right, border=5, flag=wx.BOTTOM | wx.GROW)

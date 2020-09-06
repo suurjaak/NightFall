@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev15"
+Version = "2.0.dev16"
 
 VersionDate = "06.09.2020"
 
@@ -156,6 +156,9 @@ The default dimming schedule, [1,0,..] per each quarter hour
 """
 DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
 
+"""Datetime from which to bring schedule into effect."""
+SuspendedStart = None
+
 """URL to program homepage."""
 HomeUrl = "https://github.com/suurjaak/NightFall"
 
@@ -164,6 +167,22 @@ TrayTooltip = "NightFall (double-click to toggle dimming)"
 
 """Label for unsaved theme in combobox."""
 UnsavedLabel = " (unsaved) "
+
+"""Minutes to postpone schedule by on suspending."""
+SuspendInterval = 20
+
+"""Activation label for suspend-button."""
+SuspendOnLabel = "\n".join(x.center(15) for x in 
+                           ("Suspend\nfor %s minutes" % SuspendInterval).split("\n"))
+
+"""Deactivation label for suspend-button."""
+SuspendOffLabel = "Unsuspend"
+
+"""Activation tooltip for suspend-button."""
+SuspendOnToolTip = "Delay activating schedule for %s minutes" % SuspendInterval
+
+"""Deactivation tooltip for suspend-button."""
+SuspendOffToolTip = "Apply schedule immediately"
 
 """Information text shown on theme editor page."""
 InfoEditorText = (
