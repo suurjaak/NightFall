@@ -1907,10 +1907,13 @@ class ThemeImaging(object):
     def GetBitmap(cls, name, border=False, label=None):
         """Returns bitmap for named theme, created with other args."""
         args = dict(border=border, label=label)
+        args = {k: v for k, v in args.items() if v}
+        if not cls._themes[name]["supported"]:
+            args["supported"] = False
         key = tuple(args.items())
         cls._bitmaps.setdefault(name, {})
         if key not in cls._bitmaps[name]:
-            bmp = get_theme_bitmap(**dict(cls._themes[name], **args))
+            bmp = get_theme_bitmap(cls._themes[name]["theme"], **args)
             cls._bitmaps[name][key] = bmp
         return cls._bitmaps[name][key]
 
@@ -1921,8 +1924,7 @@ class ThemeImaging(object):
         if name not in self._themes: return wx.NullImage, (0, 0), False
 
         args = {}
-        if self._themes[name].get("supported") == False: args["supported"] = False
-        if thumbnailsize == conf.ThemeNamedBitmapSize:   args["label"] = name
+        if thumbnailsize == conf.ThemeNamedBitmapSize: args["label"] = name
         img = self.GetBitmap(name, **args).ConvertToImage()
         return img, img.GetSize(), img.HasAlpha()
 
