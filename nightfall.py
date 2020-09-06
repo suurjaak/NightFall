@@ -2007,16 +2007,16 @@ def get_theme_bitmap(theme, supported=True, border=False, label=None):
     dc.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
                        wx.FONTWEIGHT_BOLD, faceName="Tahoma"))
     twidth, theight = dc.GetTextExtent(btext)
-    ystart = (bmp.Size.height - theight) / 2 - 4
+    ystart = (size[1] - theight) / 2 - 4
 
     # Draw brightness text shadow (dark text shifted +-1px in each direction)
     dc.SetTextForeground(wx.BLACK)
     for dx, dy in [(-1, 0), (-1, 1), (1, 0), (1, 1), (1, -1), (-1, -1)]:
-        dc.DrawText(btext, (bmp.Size.width - twidth) / 2 + dx, ystart + dy)
+        dc.DrawText(btext, (size[0] - twidth) / 2 + dx, ystart + dy)
         
     # Draw brightness text
     dc.SetTextForeground(wx.WHITE)
-    dc.DrawText(btext, (bmp.Size.width - twidth) / 2, ystart)
+    dc.DrawText(btext, (size[0] - twidth) / 2, ystart)
 
     # Draw colour code on white background
     dc.SetFont(wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
@@ -2025,11 +2025,12 @@ def get_theme_bitmap(theme, supported=True, border=False, label=None):
     cwidth, cheight = dc.GetTextExtent(ctext)
     dc.SetBrush(wx.WHITE_BRUSH)
     dc.SetPen(wx.WHITE_PEN)
-    dc.DrawRectangle(0, bmp.Size[1] - cheight - 3, *bmp.Size)
+    ystart = conf.ThemeBitmapSize[1] - cheight
+    dc.DrawRectangle(0, ystart - 3, *bmp.Size)
     dc.SetPen(wx.LIGHT_GREY_PEN) # Draw separator above colour code
     dc.DrawLine(0, bmp.Size[1] - cheight - 3, bmp.Size[0], bmp.Size[1] - cheight - 3)
     dc.SetTextForeground(wx.BLACK if supported else wx.RED)
-    dc.DrawText(ctext, (bmp.Size[0] - cwidth) / 2 - 1, bmp.Size[1] - cheight - 1)
+    dc.DrawText(ctext, (bmp.Size[0] - cwidth) / 2 - 1, ystart - 1)
 
     if border: # Draw outer border
         dc.SetBrush(wx.TRANSPARENT_BRUSH)
@@ -2038,8 +2039,8 @@ def get_theme_bitmap(theme, supported=True, border=False, label=None):
 
     if not supported: # Draw unsupported cross-through
         dc.SetPen(wx.RED_PEN)
-        dc.DrawLine(0, 0, bmp.Size.width, bmp.Size.height)
-        dc.DrawLine(0, bmp.Size.height, bmp.Size.width, 0)
+        dc.DrawLine(0, 0, *size)
+        dc.DrawLine(0, size[1], size[0], 0)
 
     if label is not None:
         ystart, ystop = conf.ThemeBitmapSize[1], conf.ThemeNamedBitmapSize[1]
