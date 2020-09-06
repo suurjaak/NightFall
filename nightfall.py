@@ -360,9 +360,9 @@ class NightFall(wx.App):
 
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
         frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
-            self.on_select_list_theme, frame.list_themes._scrolled)
+            self.on_select_list_theme, frame.list_themes)
         frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_DCLICK,
-            self.on_apply_list_theme, frame.list_themes._scrolled)
+            self.on_apply_list_theme, frame.list_themes)
         frame.Bind(wx.EVT_LIST_DELETE_ITEM, self.on_delete_theme, frame.list_themes)
 
         ColourManager.Init(frame)
@@ -1657,6 +1657,8 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
         self._scrolled.Bind(wx.EVT_MOUSEWHEEL, None) # Disable zoom
         self._scrolled.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
                             self._OnSelectionChanged)
+        self._scrolled.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_DCLICK,
+                            self._OnDoubleClick)
         ColourManager.Manage(self._scrolled, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
 
 
@@ -1691,14 +1693,11 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
 
     def _OnChar(self, event):
         """Handler for keypress, allows navigation, activation and deletion."""
-        if not self.GetItemCount(): return
+        if not self.GetItemCount(): return event.Skip()
 
         selection, sel2 = self.GetSelection(), None
         if event.KeyCode in KEYS.ENTER:
-            if selection >= 0:
-                evt = wx.lib.agw.thumbnailctrl.ThumbnailEvent(
-                    wx.lib.agw.thumbnailctrl.wxEVT_THUMBNAILS_DCLICK, self.Id)
-                wx.PostEvent(self, evt)
+            if selection >= 0: self._OnDoubleClick()
         elif event.KeyCode in KEYS.DELETE:
             evt = wx.CommandEvent(wx.wxEVT_LIST_DELETE_ITEM, self.Id)
             evt.SetEventObject(self)
@@ -1741,8 +1740,8 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
             elif event.KeyCode in KEYS.END:
                 if event.ControlDown(): sel2 = sel_max
                 else: sel2 = selection + (per_line - line_pos - 1)
+            else: event.Skip()
             if sel2 is not None:
-                print "sel2", sel2
                 self.SetSelection(max(0, (min(sel2, sel_max))))
 
 
@@ -1751,6 +1750,20 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
         event.Skip()
         # Disable ThumbnailCtrl's multiple selection
         self._scrolled._selectedarray[:] = [self.GetSelection()]
+        evt = wx.lib.agw.thumbnailctrl.ThumbnailEvent(
+            wx.lib.agw.thumbnailctrl.wxEVT_THUMBNAILS_SEL_CHANGED, self.Id)
+        evt.SetEventObject(self)
+        evt.Selection = self.GetSelection()
+        wx.PostEvent(self, evt)
+
+
+    def _OnDoubleClick(self, event=None):
+        """Handler for double-clicking item, fires EVT_THUMBNAILS_DCLICK."""
+        if event: event.Skip()
+        evt = wx.lib.agw.thumbnailctrl.ThumbnailEvent(
+            wx.lib.agw.thumbnailctrl.wxEVT_THUMBNAILS_DCLICK, self.Id)
+        evt.SetEventObject(self)
+        wx.PostEvent(self, evt)
 
 
 
