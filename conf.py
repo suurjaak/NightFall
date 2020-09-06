@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    04.09.2020
+@modified    06.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev12"
+Version = "2.0.dev13"
 
-VersionDate = "04.09.2020"
+VersionDate = "06.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -36,14 +36,14 @@ else:
 
 """List of attribute names that can be saved to and loaded from ConfigFile."""
 FileDirectives = [
-    "CurrentTheme", "Schedule", "ScheduleEnabled", "ThemeEnabled", "Themes",
+    "ManualEnabled", "Schedule", "ScheduleEnabled", "ThemeName", "Themes",
 ]
 """List of user-modifiable attributes, saved if changed from default."""
 OptionalFileDirectives = [
-    "FadeSteps", "ThemeBitmapSize", "WindowTimeout", "WindowSize",
+    "FadeSteps", "ThemeBitmapSize", "ThemeNamedBitmapSize", 
     "WindowSlideInEnabled", "WindowSlideOutEnabled",
     "WindowSlideInStep", "WindowSlideOutStep",
-    "WindowSlideDelay", "UnsavedTheme",
+    "WindowSlideDelay", "UnsavedLabel", "UnsavedTheme",
 ]
 Defaults = {}
 
@@ -53,17 +53,11 @@ ConfigFile = "%s.ini" % os.path.join(ApplicationDirectory, Title.lower())
 """Settings window size in pixels, (w, h)."""
 WindowSize = (400, 380)
 
-"""Tooltip shown for the tray icon."""
-TrayTooltip = "NightFall (double-click to toggle dimming)"
-
-"""URL to program homepage."""
-HomeUrl = "https://github.com/suurjaak/NightFall"
-
-"""Clock central icon."""
-ClockIcon = os.path.join(ResourceDirectory, "icon_48x48.png")
-
 """Size for theme bitmaps, as (w, h)."""
-ThemeBitmapSize = (80, 48)
+ThemeBitmapSize = (80, 50)
+
+"""Size for labelled theme bitmaps, as (w, h)."""
+ThemeNamedBitmapSize = ThemeBitmapSize[0], ThemeBitmapSize[1] + 15
 
 """Application icons."""
 WindowIcons = [os.path.join(ResourceDirectory, "icon_{0}x{0}.png".format(x))
@@ -73,27 +67,8 @@ WindowIcons = [os.path.join(ResourceDirectory, "icon_{0}x{0}.png".format(x))
 BrightnessIcons = [os.path.join(ResourceDirectory, "brightness_lo.png"),
                    os.path.join(ResourceDirectory, "brightness_hi.png")]
 
-"""Number of milliseconds before settings window is hidden on losing focus."""
-WindowTimeout = 30000
-
-"""Whether sliding the settings window in/out of view is enabled."""
-WindowSlideInEnabled = True
-WindowSlideOutEnabled = False
-"""Pixel step for settings window movement during slidein/slideout."""
-WindowSlideInStep = 6
-WindowSlideOutStep = 5
-
-"""Milliseconds between steps during slidein/slideout."""
-WindowSlideDelay = 10
-
-"""Milliseconds between steps during theme fadein/fadeout."""
-FadeDelay = 30
-
-"""Number of steps to take during theme fadein/fadeout."""
-FadeSteps = 20
-
-"""Command-line parameter for running the program with settings minimized."""
-StartMinimizedParameter = "--start-minimized"
+"""Clock central icon."""
+ClockIcon = os.path.join(ResourceDirectory, "icon_48x48.png")
 
 """Tray icon when dimming is enabled."""
 TrayIconOn = os.path.join(ResourceDirectory, "tray_on.png")
@@ -110,14 +85,36 @@ TrayIconOffScheduled = os.path.join(ResourceDirectory, "tray_off_scheduled.png")
 """List of all tray icons by state, [dimming now|schedule enabled]."""
 TrayIcons = [TrayIconOff, TrayIconOffScheduled, TrayIconOn, TrayIconOnScheduled]
 
+"""Number of seconds before settings window is hidden on losing focus."""
+WindowTimeout = 30
+
+"""Whether sliding the settings window in/out of view is enabled."""
+WindowSlideInEnabled = True
+WindowSlideOutEnabled = False
+"""Pixel step for settings window movement during slidein/slideout."""
+WindowSlideInStep = 6
+WindowSlideOutStep = 5
+
+"""Milliseconds between steps during slidein/slideout."""
+WindowSlideDelay = 10
+
+"""Milliseconds between steps during theme fadein/fadeout."""
+FadeDelay = 30
+
+"""Number of incremental steps to take during theme fadein/fadeout."""
+FadeSteps = 20
+
+"""Command-line parameter for running the program with settings minimized."""
+StartMinimizedParameter = "--start-minimized"
+
 """
 Valid range for gamma coefficients, as (min, max). Lower coefficients cause the
 system calls to fail for unknown reason.
 """
 ValidColourRange = (59, 255)
 
-"""Whether dimming is currently enabled."""
-ThemeEnabled = False
+"""Whether dimming is manually enabled."""
+ManualEnabled = False
 
 """Whether time-scheduled automatic dimming is enabled."""
 ScheduleEnabled = False
@@ -125,11 +122,8 @@ ScheduleEnabled = False
 """Whether NightFall runs at computer startup."""
 StartupEnabled = False
 
-"""
-Screen colour theme, as a list of 4 integers, standing for 3 RGB channels
-and brightness, ranging from 0..255 (brightness 128 is 100%, 255 is superbright).
-"""
-CurrentTheme = [255, 211, 176,  57]
+"""Name of current selected theme."""
+ThemeName = "alpenglow"
 
 """Gamma coefficients for normal display."""
 NormalTheme = [255, 255, 255, 128]
@@ -137,7 +131,7 @@ NormalTheme = [255, 255, 255, 128]
 """Gamma coefficients being edited in theme editor."""
 UnsavedTheme = None
 
-"""Screen brightness for normal display."""
+"""Screen brightness for normal display, most screens can go 0..200%."""
 NormalBrightness = 128
 
 """Stored colour themes, as {name: [r, g, b, brightness]}."""
@@ -160,6 +154,15 @@ The default dimming schedule, [1,0,..] per each quarter hour
 (21->05 on, 06->20 off).
 """
 DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
+
+"""URL to program homepage."""
+HomeUrl = "https://github.com/suurjaak/NightFall"
+
+"""Tooltip shown for the tray icon."""
+TrayTooltip = "NightFall (double-click to toggle dimming)"
+
+"""Label for unsaved theme in combobox."""
+UnsavedLabel = " (unsaved) "
 
 """Information text shown on theme editor page."""
 InfoEditorText = (
@@ -196,7 +199,7 @@ AboutText = """
 
 
 def load():
-    """Loads FileDirectives from ConfigFile into this module's attributes."""
+    """Loads known directives from ConfigFile into this module's attributes."""
     global Defaults
 
     section = "*"
@@ -227,7 +230,7 @@ def load():
 
 
 def save():
-    """Saves FileDirectives into ConfigFile."""
+    """Saves directives into ConfigFile."""
     section = "*"
     module = sys.modules[__name__]
     parser = RawConfigParser()
