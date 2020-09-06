@@ -447,6 +447,7 @@ class NightFall(wx.App):
                                                message="Schedule in effect.")
                 if self.trayicon.IsAvailable(): m.UseTaskBarIcon(self.trayicon)
                 m.Show()
+            if conf.ManualEnabled: self.dimmer.toggle_manual(False)
         elif "STARTUP TOGGLED" == topic:
             self.frame.cb_startup.Value = data
         elif "STARTUP POSSIBLE" == topic:
