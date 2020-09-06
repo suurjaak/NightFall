@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev13"
+Version = "2.0.dev14"
 
 VersionDate = "06.09.2020"
 
@@ -142,6 +142,7 @@ Themes = {
     "golden hour": [255, 255, 159,  77],
     "green visor": [159, 255, 159,  77],
     "no sleep":    [128, 128, 255, 128],
+    "superbright": [255, 255, 255, 255],
     "twilight":    [255, 179, 179,  57],
     "fireside":    [255, 128, 128, 128],
 }
