@@ -101,6 +101,8 @@ class Dimmer(object):
             conf.ThemeName = None
         if not conf.UnsavedTheme and not conf.ThemeName and conf.Themes:
             conf.ThemeName = sorted(conf.Themes)[0]
+        if not conf.UnsavedTheme and not conf.Themes:
+            conf.UnsavedTheme = conf.Defaults["Themes"][conf.Defaults["ThemeName"]]
         if conf.UnsavedTheme:
             name = next((k for k, v in conf.Themes.items()
                          if v == conf.UnsavedTheme), None)
@@ -525,7 +527,8 @@ class NightFall(wx.App):
             cmb.SetSelection(cmb.FindItem(name))
             return
 
-        if name in conf.Themes:
+        theme_existed = name in conf.Themes
+        if theme_existed:
             self.frame_has_modal = True
             resp = wx.MessageBox('Theme named "%s" already exists, '
                 'are you sure you want to overwrite it?' % name, conf.Title,
@@ -534,9 +537,11 @@ class NightFall(wx.App):
             self.frame_has_modal = False
             if wx.OK != resp: return
 
+        conf.ThemeName, conf.Themes[name], conf.UnsavedTheme = name, theme, None
+        conf.save()
         ThemeImaging.Add(name, theme)
         ThemeImaging.Remove(conf.UnsavedLabel)
-        if name in conf.Themes:
+        if theme_existed:
             cmb.Refresh(); lst.Refresh()
         else:
             choices = sorted(conf.Themes, key=lambda x: x.lower())
@@ -546,8 +551,6 @@ class NightFall(wx.App):
             conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
         self.frame.button_restore.ContainingSizer.Layout()
         self.name_selected = name
-        conf.ThemeName, conf.Themes[name], conf.UnsavedTheme = name, theme, None
-        conf.save()
 
 
     def on_delete_theme(self, event=None):
@@ -582,6 +585,14 @@ class NightFall(wx.App):
             name2 = self.frame.combo_themes.GetItemValue(idx2)
             conf.ThemeName = name2 if name2 != conf.UnsavedLabel else None
             self.name_selected = conf.ThemeName
+        if not conf.Themes and not conf.UnsavedTheme:
+            self.name_selected = conf.ThemeName = None
+            conf.UnsavedTheme = theme
+            ThemeImaging.Add(conf.UnsavedLabel, theme)
+            self.frame.combo_themes.Insert(conf.UnsavedLabel, 0)
+            self.frame.combo_themes.SetSelection(0)
+            self.frame.combo_themes.ToolTip = get_theme_str(theme)
+            self.frame.button_apply.Disable(); self.frame.button_delete.Disable()
         conf.save()
 
 
@@ -1091,7 +1102,10 @@ class NightFall(wx.App):
             if ctrl is self.frame.combo_themes:
                 theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
                 ctrl.ToolTip = get_theme_str(theme)
-                
+
+        self.frame.button_apply.Enabled  = (idx >= 0)
+        self.frame.button_delete.Enabled = (idx >= 0)
+
 
 
 
@@ -1267,7 +1281,7 @@ class ClockSelector(wx.Panel):
         """Sets the currently selected time periods, as a list of 0/1."""
         refresh = (self.selections != selections)
         self.selections = selections[:]
-        if refresh: self.Refresh()
+        if refresh: self.InitBuffer(); self.Refresh()
 
 
     def GetSelections(self):
@@ -1591,7 +1605,7 @@ class BitmapComboBox(wx.adv.OwnerDrawnComboBox):
 
     def Insert(self, item, pos):
         """Inserts an item at position."""
-        pos = min(pos, len(self._items)) % len(self._items)
+        pos = min(pos, len(self._items)) % (len(self._items) or 1)
         self._items.insert(pos, item)
         super(BitmapComboBox, self).Insert(str(item), pos)
 
