@@ -366,13 +366,14 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_LIST_DELETE_ITEM, self.on_delete_theme, frame.list_themes)
 
         ColourManager.Init(frame)
-        frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_manual,  frame.cb_enabled)
-        frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_startup, frame.cb_startup)
-        frame.Bind(wx.EVT_BUTTON,     self.on_toggle_settings, frame.button_ok)
-        frame.Bind(wx.EVT_BUTTON,     self.on_exit, frame.button_exit)
-        frame.Bind(wx.EVT_BUTTON,     self.on_apply_list_theme, frame.button_apply)
-        frame.Bind(wx.EVT_BUTTON,     self.on_delete_theme, frame.button_delete)
-        frame.Bind(wx.EVT_BUTTON,     self.on_save_theme,   frame.button_save)
+        frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_manual,      frame.cb_enabled)
+        frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_startup,     frame.cb_startup)
+        frame.Bind(wx.EVT_BUTTON,     self.on_toggle_settings,    frame.button_ok)
+        frame.Bind(wx.EVT_BUTTON,     self.on_exit,               frame.button_exit)
+        frame.Bind(wx.EVT_BUTTON,     self.on_apply_list_theme,   frame.button_apply)
+        frame.Bind(wx.EVT_BUTTON,     self.on_restore_themes,     frame.button_restore)
+        frame.Bind(wx.EVT_BUTTON,     self.on_delete_theme,       frame.button_delete)
+        frame.Bind(wx.EVT_BUTTON,     self.on_save_theme,         frame.button_save)
         frame.Bind(wx.EVT_COMBOBOX,   self.on_select_combo_theme, frame.combo_themes)
         frame.link_www.Bind(wx.html.EVT_HTML_LINK_CLICKED,
                             lambda e: webbrowser.open(e.GetLinkInfo().Href))
@@ -540,6 +541,9 @@ class NightFall(wx.App):
             choices = sorted(conf.Themes, key=lambda x: x.lower())
             cmb.SetItems(choices); lst.SetItems(choices)
         cmb.SetSelection(cmb.FindItem(name)); lst.SetSelection(lst.FindItem(name))
+        self.frame.button_restore.Shown = any(
+            conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
+        self.frame.button_restore.ContainingSizer.Layout()
         self.name_selected = name
         conf.ThemeName, conf.Themes[name], conf.UnsavedTheme = name, theme, None
         conf.save()
@@ -563,6 +567,9 @@ class NightFall(wx.App):
         ThemeImaging.Remove(name)
         self.frame.list_themes.RemoveItemAt(selected)
         self.frame.list_themes.Refresh()
+        self.frame.button_restore.Shown = any(
+            conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
+        self.frame.button_restore.ContainingSizer.Layout()
         if self.dimmer.should_dim() and name == conf.ThemeName:
             self.dimmer.toggle_manual(False)
 
@@ -575,6 +582,13 @@ class NightFall(wx.App):
             conf.ThemeName = name2 if name2 != conf.UnsavedLabel else None
             self.name_selected = conf.ThemeName
         conf.save()
+
+
+    def on_restore_themes(self, event=None):
+        """Restores original themes."""
+        conf.Themes.update(conf.Defaults["Themes"])
+        conf.save()
+        self.populate()
 
 
     def on_open_tray_menu(self, event=None):
@@ -793,6 +807,7 @@ class NightFall(wx.App):
         else:
             self.frame.combo_themes.Insert(conf.UnsavedLabel, 0)
         self.frame.combo_themes.SetSelection(0)
+        self.frame.combo_themes.ToolTip = get_theme_str(theme)
         conf.UnsavedTheme = theme
         self.dimmer.set_theme(theme, "THEME MODIFIED")
 
@@ -933,9 +948,13 @@ class NightFall(wx.App):
         panel_saved_buttons.Sizer = wx.BoxSizer(wx.HORIZONTAL)
         panel_themes.Sizer.Add(panel_saved_buttons, border=5,
                                      flag=wx.GROW | wx.ALL)
-        frame.button_apply  = wx.Button(panel_saved_buttons, label="Apply theme")
-        frame.button_delete = wx.Button(panel_saved_buttons, label="Remove theme")
+        frame.button_apply   = wx.Button(panel_saved_buttons, label="Apply theme")
+        frame.button_restore = wx.Button(panel_saved_buttons, label="Restore defaults")
+        frame.button_delete  = wx.Button(panel_saved_buttons, label="Remove theme")
+        frame.button_restore.ToolTip = "Restore original themes"
         panel_saved_buttons.Sizer.Add(frame.button_apply)
+        panel_saved_buttons.Sizer.AddStretchSpacer()
+        panel_saved_buttons.Sizer.Add(frame.button_restore)
         panel_saved_buttons.Sizer.AddStretchSpacer()
         panel_saved_buttons.Sizer.Add(frame.button_delete)
 
@@ -1055,6 +1074,9 @@ class NightFall(wx.App):
             ThemeImaging.Add(name, theme)
         if conf.UnsavedTheme:
             ThemeImaging.Add(conf.UnsavedLabel, conf.UnsavedTheme)
+        self.frame.button_restore.Shown = any(
+            conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
+        self.frame.button_restore.ContainingSizer.Layout()
 
         items = sorted(conf.Themes, key=lambda x: x.lower())
         citems = ([conf.UnsavedLabel] if conf.UnsavedTheme else []) + items
@@ -1065,7 +1087,11 @@ class NightFall(wx.App):
         for ctrl in self.frame.combo_themes, self.frame.list_themes:
             idx = ctrl.FindItem(name)
             if idx >= 0: ctrl.SetSelection(idx)
+            if ctrl is self.frame.combo_themes:
+                theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
+                ctrl.ToolTip = get_theme_str(theme)
                 
+
 
 
 class ClockSelector(wx.Panel):
