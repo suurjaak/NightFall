@@ -2065,7 +2065,7 @@ def get_theme_bitmap(theme, supported=True, border=False, label=None):
     dc.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
                        wx.FONTWEIGHT_BOLD, faceName="Tahoma"))
     twidth, theight = dc.GetTextExtent(btext)
-    ystart = (size[1] - theight) / 2 - 4
+    ystart = (conf.ThemeBitmapSize[1] - theight) / 2 - 4
 
     # Draw brightness text shadow (dark text shifted +-1px in each direction)
     dc.SetTextForeground(wx.BLACK)
@@ -2097,8 +2097,8 @@ def get_theme_bitmap(theme, supported=True, border=False, label=None):
 
     if not supported: # Draw unsupported cross-through
         dc.SetPen(wx.RED_PEN)
-        dc.DrawLine(0, 0, *size)
-        dc.DrawLine(0, size[1], size[0], 0)
+        dc.DrawLine(0, 0, *conf.ThemeBitmapSize)
+        dc.DrawLine(0, conf.ThemeBitmapSize[1], size[0], 0)
 
     if label is not None:
         ystart, ystop = conf.ThemeBitmapSize[1], conf.ThemeNamedBitmapSize[1]
