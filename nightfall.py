@@ -1841,6 +1841,7 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
             else: event.Skip()
             if sel2 is not None:
                 self.SetSelection(max(0, (min(sel2, sel_max))))
+        else: event.Skip()
 
 
     def _OnSelectionChanged(self, event):
