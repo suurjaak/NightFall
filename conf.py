@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    06.09.2020
+@modified    07.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev16"
+Version = "2.0.dev17"
 
-VersionDate = "06.09.2020"
+VersionDate = "07.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable

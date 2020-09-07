@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    06.09.2020
+@modified    07.09.2020
 """
 import collections
 import copy
@@ -52,6 +52,7 @@ class Dimmer(object):
     SCHEDULE TOGGLED    schedule applied-state has changed             data=enabled
     SCHEDULE CHANGED    schedule contents have changed                 data=schedule
     SCHEDULE IN EFFECT  dimming has been applied on schedule           data=theme
+    SUSPEND TOGGLED     suspended state has changed                    data=enabled
     STARTUP POSSIBLE    can program be added to system startup         data=enabled
     STARTUP TOGGLED     running program at system startup has changed  data=enabled
     THEME CHANGED       dimming theme has changed                      data=theme
@@ -161,6 +162,7 @@ class Dimmer(object):
 
         if conf.SuspendedStart and conf.SuspendedStart <= datetime.datetime.now():
             conf.SuspendedStart = None
+            self.post_event("SUSPEND TOGGLED", False)
         theme, msg = conf.NormalTheme, "NORMAL DISPLAY"
         if self.should_dim_scheduled():
             if not conf.SuspendedStart:
@@ -192,7 +194,9 @@ class Dimmer(object):
         changed = (enabled != conf.ScheduleEnabled)
         if not changed: return
 
-        if not enabled: conf.SuspendedStart = None
+        if not enabled and conf.SuspendedStart:
+            conf.SuspendedStart = None
+            self.post_event("SUSPEND TOGGLED", False)
         conf.ScheduleEnabled = enabled
         self.post_event("SCHEDULE TOGGLED", conf.ScheduleEnabled)
         conf.save()
@@ -229,6 +233,7 @@ class Dimmer(object):
             start, msg = None, "SCHEDULE IN EFFECT"
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
         conf.SuspendedStart = start
+        self.post_event("SUSPEND TOGGLED", enabled)
         self.apply_theme(theme, msg, fade=True)
 
 
@@ -276,8 +281,9 @@ class Dimmer(object):
 
         did_dim_scheduled = self.should_dim_scheduled()
         conf.Schedule = schedule[:]
-        if did_dim_scheduled and not self.should_dim_scheduled():
+        if conf.SuspendedStart and did_dim_scheduled and not self.should_dim_scheduled():
             conf.SuspendedStart = None
+            self.post_event("SUSPEND TOGGLED", False)
         conf.save()
         self.post_event("SCHEDULE CHANGED", conf.Schedule)
         if did_dim_scheduled and self.should_dim_scheduled(): return
@@ -483,6 +489,23 @@ class NightFall(wx.App):
             self.frame.button_suspend.ToolTip = conf.SuspendOnToolTip
             self.frame.button_suspend.Show()
             self.frame.button_suspend.ContainingSizer.Layout()
+        elif "SUSPEND TOGGLED" == topic:
+            if data:
+                dt = conf.SuspendedStart.strftime("%H:%M")
+                self.frame.label_suspend.Label    = "Suspended until %s" % dt
+                self.frame.button_suspend.Label   = conf.SuspendOffLabel
+                self.frame.button_suspend.ToolTip = conf.SuspendOffToolTip
+                self.frame.label_suspend.Show()
+                self.frame.button_suspend.Show()
+            elif conf.ScheduleEnabled:
+                self.frame.button_suspend.Label   = conf.SuspendOnLabel
+                self.frame.button_suspend.ToolTip = conf.SuspendOnToolTip
+                self.frame.label_suspend.Hide()
+                self.frame.button_suspend.Show()
+            else:
+                self.frame.label_suspend.Hide()
+                self.frame.button_suspend.Hide()
+            self.frame.button_suspend.ContainingSizer.Layout()
         elif "STARTUP TOGGLED" == topic:
             self.frame.cb_startup.Value = data
         elif "STARTUP POSSIBLE" == topic:
@@ -491,8 +514,7 @@ class NightFall(wx.App):
             self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
         elif "NORMAL DISPLAY" == topic:
             self.set_tray_icon(self.TRAYICONS[False][conf.ScheduleEnabled])
-            if not conf.SuspendedStart:
-                self.frame.cb_enabled.Enable(); self.frame.button_suspend.Hide()
+            self.frame.cb_enabled.Enable()
 
         if "THEME APPLIED" in (topic, info):
             idx = self.frame.combo_themes.FindItem(conf.ThemeName or conf.UnsavedLabel)
@@ -523,7 +545,7 @@ class NightFall(wx.App):
         name = self.frame.list_themes.GetItemValue(selected)
         self.name_selected = conf.ThemeName = name
         if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
-        conf.SuspendedStart = None
+        self.dimmer.toggle_suspend(False)
         self.dimmer.set_theme(conf.Themes[name], "THEME APPLIED")
 
 
@@ -873,7 +895,7 @@ class NightFall(wx.App):
         self.frame.combo_themes.SetSelection(0)
         self.frame.combo_themes.ToolTip = get_theme_str(theme)
         conf.UnsavedTheme = theme
-        conf.SuspendedStart = None
+        self.dimmer.toggle_suspend(False)
         self.dimmer.set_theme(theme, "THEME MODIFIED")
 
 
@@ -975,21 +997,19 @@ class NightFall(wx.App):
         sizer_middle = wx.BoxSizer(wx.HORIZONTAL)
         sizer_right = wx.BoxSizer(wx.VERTICAL)
         selector_time = frame.selector_time = ClockSelector(panel_config)
-        sizer_middle.Add(selector_time, proportion=1, border=5, flag=wx.GROW | wx.ALL)
         frame.label_combo = wx.StaticText(panel_config, label="Colour theme:")
-        sizer_right.Add(frame.label_combo)
 
         combo_themes = BitmapComboBox(panel_config, bitmapsize=conf.ThemeNamedBitmapSize,
                                      imagehandler=ThemeImaging)
         frame.combo_themes = combo_themes
         combo_themes.SetPopupMaxHeight(200)
-        sizer_right.Add(combo_themes)
 
         label_error = frame.label_error = wx.StaticText(panel_config, style=wx.ALIGN_CENTER)
         ColourManager.Manage(label_error, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
-        sizer_right.Add(label_error, border=10, flag=wx.TOP | wx.BOTTOM)
-        sizer_right.AddStretchSpacer()
 
+        label_suspend = frame.label_suspend = wx.StaticText(panel_config)
+        ColourManager.Manage(label_suspend, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
+        label_suspend.Hide()
         frame.button_suspend = wx.Button(panel_config, label=conf.SuspendOnLabel)
         frame.button_suspend.ToolTip = conf.SuspendOnToolTip
         if "\n" in conf.SuspendOnLabel: frame.button_suspend.MinSize = (-1, 35)
@@ -998,10 +1018,16 @@ class NightFall(wx.App):
         cb_schedule.ToolTip = "Apply automatically during the highlighted hours"
         cb_startup = frame.cb_startup = wx.CheckBox(panel_config, label="Run at startup")
         cb_startup.ToolTip = "Adds %s to startup programs" % conf.Title
+
+        sizer_middle.Add(selector_time, proportion=1, border=5, flag=wx.GROW | wx.ALL)
+        sizer_right.Add(frame.label_combo)
+        sizer_right.Add(combo_themes)
+        sizer_right.Add(label_error, border=10, flag=wx.TOP | wx.BOTTOM)
+        sizer_right.AddStretchSpacer()
+        sizer_right.Add(label_suspend, border=5, flag=wx.LEFT | wx.TOP)
         sizer_right.Add(frame.button_suspend, border=5, flag=wx.ALL ^ wx.BOTTOM | wx.GROW)
         sizer_right.Add(cb_schedule, border=5, flag=wx.ALL)
         sizer_right.Add(cb_startup, border=5, flag=wx.LEFT)
-
         sizer_middle.Add(sizer_right, border=5, flag=wx.BOTTOM | wx.GROW)
         panel_config.Sizer.Add(sizer_middle, proportion=1, border=5, flag=wx.GROW | wx.ALL)
 
@@ -1013,15 +1039,16 @@ class NightFall(wx.App):
         ColourManager.Manage(list_themes, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         frame.list_themes = list_themes
 
-        panel_themes.Sizer.Add(list_themes, border=5, proportion=1, flag=wx.TOP | wx.GROW)
         panel_saved_buttons = wx.Panel(panel_themes)
         panel_saved_buttons.Sizer = wx.BoxSizer(wx.HORIZONTAL)
-        panel_themes.Sizer.Add(panel_saved_buttons, border=5,
-                                     flag=wx.GROW | wx.ALL)
         frame.button_apply   = wx.Button(panel_saved_buttons, label="Apply theme")
         frame.button_restore = wx.Button(panel_saved_buttons, label="Restore defaults")
         frame.button_delete  = wx.Button(panel_saved_buttons, label="Remove theme")
         frame.button_restore.ToolTip = "Restore original themes"
+
+        panel_themes.Sizer.Add(list_themes, border=5, proportion=1, flag=wx.TOP | wx.GROW)
+        panel_themes.Sizer.Add(panel_saved_buttons, border=5,
+                                     flag=wx.GROW | wx.ALL)
         panel_saved_buttons.Sizer.Add(frame.button_apply)
         panel_saved_buttons.Sizer.AddStretchSpacer()
         panel_saved_buttons.Sizer.Add(frame.button_restore)
@@ -1033,9 +1060,6 @@ class NightFall(wx.App):
         text_detail = wx.StaticText(panel_editor,
             style=wx.ALIGN_CENTER, label=conf.InfoEditorText)
         ColourManager.Manage(text_detail, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
-        panel_editor.Sizer.Add(text_detail, border=5,
-            flag=wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
-        panel_editor.Sizer.AddStretchSpacer()
 
         sizer_bar = wx.BoxSizer(wx.HORIZONTAL)
         sizer_right = wx.BoxSizer(wx.VERTICAL)
@@ -1066,11 +1090,13 @@ class NightFall(wx.App):
         frame.sliders.append(frame.sliders.pop(0)) # Make brightness first
 
         frame.bmp_detail = wx.StaticBitmap(panel_editor)
-        sizer_right.Add(frame.bmp_detail, border=5, flag=wx.TOP)
-
         button_save = frame.button_save = wx.Button(panel_editor, label="Save theme")
-        sizer_right.Add(button_save, border=5, flag=wx.TOP | wx.GROW)
 
+        panel_editor.Sizer.Add(text_detail, border=5,
+            flag=wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+        panel_editor.Sizer.AddStretchSpacer()
+        sizer_right.Add(frame.bmp_detail, border=5, flag=wx.TOP)
+        sizer_right.Add(button_save, border=5, flag=wx.TOP | wx.GROW)
         sizer_bar.Add(sizer_sliders, border=10, proportion=1, flag=wx.LEFT | wx.GROW)
         sizer_bar.Add(sizer_right, border=5, flag=wx.ALL | wx.GROW)
         panel_editor.Sizer.Add(sizer_bar, proportion=1, flag=wx.GROW)
@@ -1093,15 +1119,9 @@ class NightFall(wx.App):
         ColourManager.Manage(text, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
 
         sizer_footer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_footer.Add(text)
-        sizer_footer.AddStretchSpacer()
-        sizer_footer.Add(link_www, border=5, flag=wx.RIGHT)
-        panel_about.Sizer.Add(label_about, border=5, proportion=1, flag=wx.ALL | wx.GROW)
-        panel_about.Sizer.Add(sizer_footer, border=5, flag=wx.LEFT | wx.GROW)
 
         panel_buttons = frame.panel_buttons = wx.Panel(panel)
         panel_buttons.Sizer = wx.BoxSizer(wx.HORIZONTAL)
-        sizer.Add(panel_buttons, border=5, flag=wx.GROW | wx.ALL)
         frame.button_ok = wx.lib.agw.gradientbutton.GradientButton(
             panel_buttons, label="Minimize", size=(100, -1))
         frame.button_exit = wx.lib.agw.gradientbutton.GradientButton(
@@ -1115,6 +1135,13 @@ class NightFall(wx.App):
             b.SetPressedTopColour(wx.Colour(160, 160, 160))
             b.SetPressedBottomColour(wx.Colour(160, 160, 160))
         frame.button_ok.SetToolTip("Minimize window to tray [Escape]")
+
+        sizer_footer.Add(text)
+        sizer_footer.AddStretchSpacer()
+        sizer_footer.Add(link_www, border=5, flag=wx.RIGHT)
+        panel_about.Sizer.Add(label_about, border=5, proportion=1, flag=wx.ALL | wx.GROW)
+        panel_about.Sizer.Add(sizer_footer, border=5, flag=wx.LEFT | wx.GROW)
+        sizer.Add(panel_buttons, border=5, flag=wx.GROW | wx.ALL)
         panel_buttons.Sizer.Add(frame.button_ok, border=5, flag=wx.TOP)
         panel_buttons.Sizer.AddStretchSpacer()
         panel_buttons.Sizer.Add(frame.button_exit, border=5, flag=wx.TOP)
