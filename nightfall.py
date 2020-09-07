@@ -453,12 +453,12 @@ class NightFall(wx.App):
             for i, g in enumerate(data):
                 self.frame.sliders[i].SetValue(g)
                 self.frame.sliders[i].ToolTip = str(g)
-            bmp, tooltip = get_theme_bitmap(data), get_theme_str(data)
+            bmp, tooltip = get_theme_bitmap(data, border=True), get_theme_str(data)
             for b in [self.frame.bmp_detail]: b.Bitmap, b.ToolTip = bmp, tooltip
             self.frame.label_error.Hide()
         elif "THEME FAILED" == topic:
             ThemeImaging.Add(conf.ThemeName or conf.UnsavedLabel, data, supported=False)
-            bmp = ThemeImaging.GetBitmap(conf.ThemeName or conf.UnsavedLabel)
+            bmp = ThemeImaging.GetBitmap(conf.ThemeName or conf.UnsavedLabel, border=True)
             tooltip = get_theme_str(data, supported=False)
             for b in [self.frame.bmp_detail]: b.Bitmap, b.ToolTip = bmp, tooltip
             self.frame.label_error.Label = "Setting unsupported by hardware."
