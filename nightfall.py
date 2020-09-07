@@ -955,10 +955,16 @@ class NightFall(wx.App):
 
         panel = frame.panel = wx.Panel(frame)
         sizer = panel.Sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer_checkboxes = wx.BoxSizer(wx.HORIZONTAL)
 
-        cb_enabled = frame.cb_enabled = wx.CheckBox(panel, label="Dim now")
+        cb_enabled = frame.cb_enabled = wx.CheckBox(panel, label="Apply now")
         cb_enabled.ToolTip = "Apply dimming settings now"
-        sizer.Add(cb_enabled, border=5, flag=wx.ALL)
+        cb_schedule = frame.cb_schedule = wx.CheckBox(panel, label="Apply on schedule")
+        cb_schedule.ToolTip = "Apply automatically during the highlighted hours"
+        sizer_checkboxes.Add(cb_schedule)
+        sizer_checkboxes.AddStretchSpacer()
+        sizer_checkboxes.Add(cb_enabled)
+        sizer.Add(sizer_checkboxes, border=5, flag=wx.ALL | wx.GROW)
 
         notebook = frame.notebook = wx.lib.agw.flatnotebook.FlatNotebook(panel)
         notebook.SetAGWWindowStyleFlag(wx.lib.agw.flatnotebook.FNB_FANCY_TABS |
@@ -1008,14 +1014,12 @@ class NightFall(wx.App):
         ColourManager.Manage(label_error, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
 
         label_suspend = frame.label_suspend = wx.StaticText(panel_config)
+        label_suspend.Label = "Suspended until XX:XX"
         ColourManager.Manage(label_suspend, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
-        label_suspend.Hide()
         frame.button_suspend = wx.Button(panel_config, label=conf.SuspendOnLabel)
         frame.button_suspend.ToolTip = conf.SuspendOnToolTip
         if "\n" in conf.SuspendOnLabel: frame.button_suspend.MinSize = (-1, 35)
         frame.button_suspend.Hide()
-        cb_schedule = frame.cb_schedule = wx.CheckBox(panel_config, label="Apply on schedule")
-        cb_schedule.ToolTip = "Apply automatically during the highlighted hours"
         cb_startup = frame.cb_startup = wx.CheckBox(panel_config, label="Run at startup")
         cb_startup.ToolTip = "Adds %s to startup programs" % conf.Title
 
@@ -1026,8 +1030,7 @@ class NightFall(wx.App):
         sizer_right.AddStretchSpacer()
         sizer_right.Add(label_suspend, border=5, flag=wx.LEFT | wx.TOP)
         sizer_right.Add(frame.button_suspend, border=5, flag=wx.ALL ^ wx.BOTTOM | wx.GROW)
-        sizer_right.Add(cb_schedule, border=5, flag=wx.ALL)
-        sizer_right.Add(cb_startup, border=5, flag=wx.LEFT)
+        sizer_right.Add(cb_startup, border=5, flag=wx.LEFT | wx.TOP)
         sizer_middle.Add(sizer_right, border=5, flag=wx.BOTTOM | wx.GROW)
         panel_config.Sizer.Add(sizer_middle, proportion=1, border=5, flag=wx.GROW | wx.ALL)
 
@@ -1119,13 +1122,17 @@ class NightFall(wx.App):
         ColourManager.Manage(text, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
 
         sizer_footer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer_footer.Add(text)
+        sizer_footer.AddStretchSpacer()
+        sizer_footer.Add(link_www, border=5, flag=wx.RIGHT)
+        panel_about.Sizer.Add(label_about, border=5, proportion=1, flag=wx.ALL | wx.GROW)
+        panel_about.Sizer.Add(sizer_footer, border=5, flag=wx.LEFT | wx.GROW)
 
-        panel_buttons = frame.panel_buttons = wx.Panel(panel)
-        panel_buttons.Sizer = wx.BoxSizer(wx.HORIZONTAL)
+        sizer_buttons = wx.BoxSizer(wx.HORIZONTAL)
         frame.button_ok = wx.lib.agw.gradientbutton.GradientButton(
-            panel_buttons, label="Minimize", size=(100, -1))
+            panel, label="Minimize", size=(100, -1))
         frame.button_exit = wx.lib.agw.gradientbutton.GradientButton(
-            panel_buttons, label="Exit program", size=(100, -1))
+            panel, label="Exit program", size=(100, -1))
         for b in (frame.button_ok, frame.button_exit):
             b.Font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).Bold()
             b.SetTopStartColour(wx.Colour(96, 96, 96))
@@ -1136,15 +1143,10 @@ class NightFall(wx.App):
             b.SetPressedBottomColour(wx.Colour(160, 160, 160))
         frame.button_ok.SetToolTip("Minimize window to tray [Escape]")
 
-        sizer_footer.Add(text)
-        sizer_footer.AddStretchSpacer()
-        sizer_footer.Add(link_www, border=5, flag=wx.RIGHT)
-        panel_about.Sizer.Add(label_about, border=5, proportion=1, flag=wx.ALL | wx.GROW)
-        panel_about.Sizer.Add(sizer_footer, border=5, flag=wx.LEFT | wx.GROW)
-        sizer.Add(panel_buttons, border=5, flag=wx.GROW | wx.ALL)
-        panel_buttons.Sizer.Add(frame.button_ok, border=5, flag=wx.TOP)
-        panel_buttons.Sizer.AddStretchSpacer()
-        panel_buttons.Sizer.Add(frame.button_exit, border=5, flag=wx.TOP)
+        sizer_buttons.Add(frame.button_ok, border=5, flag=wx.TOP)
+        sizer_buttons.AddStretchSpacer()
+        sizer_buttons.Add(frame.button_exit, border=5, flag=wx.TOP)
+        sizer.Add(sizer_buttons, border=5, flag=wx.GROW | wx.ALL)
 
         frame.Layout()
 
@@ -1187,6 +1189,8 @@ class NightFall(wx.App):
             if ctrl is self.frame.combo_themes:
                 theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
                 ctrl.ToolTip = get_theme_str(theme)
+
+        self.frame.label_suspend.Show(bool(conf.SuspendedStart))
 
         self.frame.button_apply.Enabled  = (idx >= 0)
         self.frame.button_delete.Enabled = (idx >= 0)

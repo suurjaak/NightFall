@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev17"
+Version = "2.0.dev18"
 
 VersionDate = "07.09.2020"
 
@@ -43,7 +43,7 @@ OptionalFileDirectives = [
     "FadeSteps", "ThemeBitmapSize", "ThemeNamedBitmapSize", 
     "WindowSlideInEnabled", "WindowSlideOutEnabled",
     "WindowSlideInStep", "WindowSlideOutStep",
-    "WindowSlideDelay", "UnsavedLabel", "UnsavedTheme",
+    "WindowSlideDelay", "WindowTimeout", "UnsavedLabel", "UnsavedTheme",
 ]
 Defaults = {}
 
