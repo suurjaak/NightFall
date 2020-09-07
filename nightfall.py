@@ -671,15 +671,17 @@ class NightFall(wx.App):
 
 
         is_dimming = self.dimmer.should_dim()
-        text = "&Turn current dimming off" if self.dimmer.should_dim() else \
-               "&Turn dimming on"
-        item = wx.MenuItem(menu, -1, text, kind=wx.ITEM_CHECK)
-        item.Font = self.frame.Font.Bold()
-        menu.Append(item)
-        item.Check(is_dimming)
-        menu.Bind(wx.EVT_MENU, self.on_toggle_dimming_tray, id=item.GetId())
+        is_dimming_scheduled = self.dimmer.should_dim_scheduled()
+        if not is_dimming_scheduled:
+            item = wx.MenuItem(menu, -1, "Apply &now", kind=wx.ITEM_CHECK)
+            item.Font = self.frame.Font.Bold()
+            menu.Append(item)
+            item.Check(is_dimming)
+            menu.Bind(wx.EVT_MENU, self.on_toggle_manual, id=item.GetId())
 
-        item = menu.Append(-1, "Apply on &schedule", kind=wx.ITEM_CHECK)
+        item = wx.MenuItem(menu, -1, "Apply on &schedule", kind=wx.ITEM_CHECK)
+        if is_dimming_scheduled: item.Font = self.frame.Font.Bold()
+        menu.Append(item)
         item.Check(conf.ScheduleEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
         if conf.ScheduleEnabled:
@@ -1014,23 +1016,23 @@ class NightFall(wx.App):
         ColourManager.Manage(label_error, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
 
         label_suspend = frame.label_suspend = wx.StaticText(panel_config)
-        label_suspend.Label = "Suspended until XX:XX"
+        label_suspend.Hide()
         ColourManager.Manage(label_suspend, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
         frame.button_suspend = wx.Button(panel_config, label=conf.SuspendOnLabel)
         frame.button_suspend.ToolTip = conf.SuspendOnToolTip
         if "\n" in conf.SuspendOnLabel: frame.button_suspend.MinSize = (-1, 35)
         frame.button_suspend.Hide()
-        cb_startup = frame.cb_startup = wx.CheckBox(panel_config, label="Run at startup")
-        cb_startup.ToolTip = "Adds %s to startup programs" % conf.Title
+        frame.cb_startup = wx.CheckBox(panel_config, label="Run at startup       ")
+        frame.cb_startup.ToolTip = "Add %s to startup programs" % conf.Title
 
         sizer_middle.Add(selector_time, proportion=1, border=5, flag=wx.GROW | wx.ALL)
-        sizer_right.Add(frame.label_combo)
-        sizer_right.Add(combo_themes)
-        sizer_right.Add(label_error, border=10, flag=wx.TOP | wx.BOTTOM)
+        sizer_right.Add(frame.label_combo, border=5, flag=wx.LEFT)
+        sizer_right.Add(combo_themes, border=5, flag=wx.LEFT)
+        sizer_right.Add(label_error, border=10, flag=wx.LEFT | wx.TOP | wx.BOTTOM)
         sizer_right.AddStretchSpacer()
         sizer_right.Add(label_suspend, border=5, flag=wx.LEFT | wx.TOP)
         sizer_right.Add(frame.button_suspend, border=5, flag=wx.ALL ^ wx.BOTTOM | wx.GROW)
-        sizer_right.Add(cb_startup, border=5, flag=wx.LEFT | wx.TOP)
+        sizer_right.Add(frame.cb_startup, border=5, flag=wx.LEFT | wx.TOP)
         sizer_middle.Add(sizer_right, border=5, flag=wx.BOTTOM | wx.GROW)
         panel_config.Sizer.Add(sizer_middle, proportion=1, border=5, flag=wx.GROW | wx.ALL)
 
@@ -1189,8 +1191,6 @@ class NightFall(wx.App):
             if ctrl is self.frame.combo_themes:
                 theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
                 ctrl.ToolTip = get_theme_str(theme)
-
-        self.frame.label_suspend.Show(bool(conf.SuspendedStart))
 
         self.frame.button_apply.Enabled  = (idx >= 0)
         self.frame.button_delete.Enabled = (idx >= 0)
