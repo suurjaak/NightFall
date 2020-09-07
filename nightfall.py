@@ -440,6 +440,7 @@ class NightFall(wx.App):
         trayicon.Bind(wx.adv.EVT_TASKBAR_RIGHT_DOWN,  self.on_open_tray_menu)
 
         self.populate()
+        ThemeImaging.AddControls(self.frame.combo_themes, self.frame.list_themes)
         self.dimmer.start()
         if conf.StartMinimizedParameter not in sys.argv:
             self.frame_move_ignore = True # Skip first move event on Show()
@@ -465,8 +466,6 @@ class NightFall(wx.App):
             self.frame.label_error.Show()
             self.frame.label_error.ContainingSizer.Layout()
             self.frame.label_error.Wrap(self.frame.label_error.Size[0])
-            self.frame.combo_themes.Refresh()
-            self.frame.list_themes.Refresh()
         elif "MANUAL TOGGLED" == topic:
             self.frame.cb_enabled.Value = data
             self.set_tray_icon(self.TRAYICONS[data][conf.ScheduleEnabled])
@@ -595,11 +594,9 @@ class NightFall(wx.App):
 
         conf.ThemeName, conf.Themes[name], conf.UnsavedTheme = name, theme, None
         conf.save()
-        ThemeImaging.Add(name, theme)
         ThemeImaging.Remove(conf.UnsavedLabel)
-        if theme_existed:
-            cmb.Refresh(); lst.Refresh()
-        else:
+        ThemeImaging.Add(name, theme)
+        if not theme_existed:
             choices = sorted(conf.Themes, key=lambda x: x.lower())
             cmb.SetItems(choices); lst.SetItems(choices)
         cmb.SetSelection(cmb.FindItem(name)); lst.SetSelection(lst.FindItem(name))
@@ -890,9 +887,7 @@ class NightFall(wx.App):
             s.ToolTip = str(value)
             theme.append(value)
         ThemeImaging.Add(conf.UnsavedLabel, theme)
-        if conf.UnsavedTheme:
-            self.frame.combo_themes.Refresh()
-        else:
+        if not conf.UnsavedTheme:
             self.frame.combo_themes.Insert(conf.UnsavedLabel, 0)
         self.frame.combo_themes.SetSelection(0)
         self.frame.combo_themes.ToolTip = get_theme_str(theme)
@@ -2005,6 +2000,7 @@ class ThemeImaging(object):
     """
     _themes  = {} # {name: {theme, supported}, }
     _bitmaps = {} # {name: {args: wx.Bitmap}, }
+    _ctrls   = set()
 
 
     @classmethod
@@ -2012,6 +2008,7 @@ class ThemeImaging(object):
         """Registers or overwrites theme bitmap."""
         cls._themes[name]  = {"theme": copy.deepcopy(theme), "supported": supported}
         cls._bitmaps.pop(name, None)
+        for c in cls._ctrls: c.Refresh()
 
 
     @classmethod
@@ -2033,6 +2030,12 @@ class ThemeImaging(object):
             bmp = get_theme_bitmap(cls._themes[name]["theme"], **args)
             cls._bitmaps[name][key] = bmp
         return cls._bitmaps[name][key]
+
+
+    @classmethod
+    def AddControls(cls, *ctrls):
+        """Adds wx controls to refresh on Add()."""
+        cls._ctrls.update(ctrls)
 
 
     def LoadThumbnail(self, filename, thumbnailsize=None):
