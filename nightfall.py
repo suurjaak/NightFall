@@ -170,16 +170,16 @@ class Dimmer(object):
         """
         if not conf.ScheduleEnabled or conf.ManualEnabled: return
 
-        if conf.SuspendedStart and conf.SuspendedStart <= datetime.datetime.now():
-            conf.SuspendedStart = None
+        if conf.SuspendedUntil and conf.SuspendedUntil <= datetime.datetime.now():
+            conf.SuspendedUntil = None
             self.post_event("SUSPEND TOGGLED", False)
         theme, msg = conf.NormalTheme, "NORMAL DISPLAY"
         if self.should_dim_scheduled():
-            if not conf.SuspendedStart:
+            if not conf.SuspendedUntil:
                 theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
                 msg = "SCHEDULE IN EFFECT"
-        elif conf.SuspendedStart:
-            conf.SuspendedStart = None
+        elif conf.SuspendedUntil:
+            conf.SuspendedUntil = None
             self.post_event("SUSPEND TOGGLED", False)
         if theme != self.current_theme:
             self.apply_theme(theme, fade=True)
@@ -207,8 +207,8 @@ class Dimmer(object):
         changed = (enabled != conf.ScheduleEnabled)
         if not changed: return
 
-        if not enabled and conf.SuspendedStart:
-            conf.SuspendedStart = None
+        if not enabled and conf.SuspendedUntil:
+            conf.SuspendedUntil = None
             self.post_event("SUSPEND TOGGLED", False)
         conf.ScheduleEnabled = enabled
         self.post_event("SCHEDULE TOGGLED", conf.ScheduleEnabled)
@@ -235,17 +235,18 @@ class Dimmer(object):
     def toggle_suspend(self, enabled):
         """Toggles schedule postponement on/off."""
         enabled = bool(enabled)
-        changed = (enabled != bool(conf.SuspendedStart))
+        changed = (enabled != bool(conf.SuspendedUntil))
         if not changed or not self.should_dim_scheduled(): return
 
         if enabled:
             delay = datetime.timedelta(minutes=conf.SuspendInterval)
-            start, msg = datetime.datetime.now() + delay, "NORMAL DISPLAY"
+            start = (datetime.datetime.now() + delay).replace(second=0, microsecond=0)
+            msg = "NORMAL DISPLAY"
             theme = conf.NormalTheme
         else:
             start, msg = None, "SCHEDULE IN EFFECT"
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-        conf.SuspendedStart = start
+        conf.SuspendedUntil = start
         self.post_event("SUSPEND TOGGLED", enabled)
         self.apply_theme(theme, msg, fade=True)
 
@@ -294,8 +295,8 @@ class Dimmer(object):
 
         did_dim_scheduled = self.should_dim_scheduled()
         conf.Schedule = schedule[:]
-        if conf.SuspendedStart and did_dim_scheduled and not self.should_dim_scheduled():
-            conf.SuspendedStart = None
+        if conf.SuspendedUntil and did_dim_scheduled and not self.should_dim_scheduled():
+            conf.SuspendedUntil = None
             self.post_event("SUSPEND TOGGLED", False)
         conf.save()
         self.post_event("SCHEDULE CHANGED", conf.Schedule)
@@ -506,7 +507,7 @@ class NightFall(wx.App):
             if conf.ManualEnabled: wx.CallAfter(self.dimmer.toggle_manual, False)
         elif "SUSPEND TOGGLED" == topic:
             if data:
-                dt = conf.SuspendedStart.strftime("%H:%M")
+                dt = conf.SuspendedUntil.strftime("%H:%M")
                 self.frame.label_suspend.Label    = "Suspended until %s" % dt
                 self.frame.button_suspend.Label   = conf.SuspendOffLabel
                 self.frame.button_suspend.ToolTip = conf.SuspendOffToolTip
@@ -826,7 +827,7 @@ class NightFall(wx.App):
             label = conf.SuspendOnLabel.strip().replace("u", "&u", 1)
             label = re.sub("\s+", " ", label)
             item = menu.Append(-1, label, kind=wx.ITEM_CHECK)
-            item.Check(bool(conf.SuspendedStart))
+            item.Check(bool(conf.SuspendedUntil))
             menu.Bind(wx.EVT_MENU, self.on_toggle_suspend, id=item.GetId())
         item = menu.Append(-1, "&Run at startup", kind=wx.ITEM_CHECK)
         item.Check(conf.StartupEnabled)
@@ -1009,14 +1010,14 @@ class NightFall(wx.App):
 
     def on_toggle_suspend(self, event=None):
         """Handler for toggling schedule suspension on/off."""
-        if conf.SuspendedStart:
+        if conf.SuspendedUntil:
             label, tooltip = conf.SuspendOnLabel, conf.SuspendOnToolTip
         else:
             label, tooltip = conf.SuspendOffLabel, conf.SuspendOffToolTip
         self.frame.button_suspend.Label   = label
         self.frame.button_suspend.ToolTip = tooltip
         self.frame.button_suspend.ContainingSizer.Layout()
-        self.dimmer.toggle_suspend(conf.SuspendedStart is None)
+        self.dimmer.toggle_suspend(conf.SuspendedUntil is None)
 
 
     def on_toggle_manual(self, event):

@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev22"
+Version = "2.0.dev23"
 
 VersionDate = "08.09.2020"
 
@@ -158,7 +158,7 @@ The default dimming schedule, [1,0,..] per each quarter hour
 DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
 
 """Datetime from which to bring schedule into effect."""
-SuspendedStart = None
+SuspendedUntil = None
 
 """URL to program homepage."""
 HomeUrl = "https://github.com/suurjaak/NightFall"
