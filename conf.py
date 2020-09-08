@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev21"
+Version = "2.0.dev22"
 
 VersionDate = "08.09.2020"
 
@@ -40,7 +40,7 @@ FileDirectives = [
 ]
 """List of user-modifiable attributes, saved if changed from default."""
 OptionalFileDirectives = [
-    "FadeSteps", "ThemeBitmapSize", "ThemeNamedBitmapSize", 
+    "FadeSteps", "ModifiedTemplate", "ThemeBitmapSize", "ThemeNamedBitmapSize", 
     "WindowSlideInEnabled", "WindowSlideOutEnabled",
     "WindowSlideInStep", "WindowSlideOutStep",
     "WindowSlideDelay", "WindowTimeout",
@@ -171,6 +171,9 @@ UnsavedName = ""
 
 """Label for unsaved theme in schedule combobox."""
 UnsavedLabel = " (unsaved) "
+
+"""String template for modified unsaved theme, with name placeholder."""
+ModifiedTemplate = "%s *"
 
 """Minutes to postpone schedule by on suspending."""
 SuspendInterval = 20

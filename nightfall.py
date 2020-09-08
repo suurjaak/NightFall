@@ -597,7 +597,7 @@ class NightFall(wx.App):
             self.frame.combo_editor.Delete(0)
             self.frame.combo_themes.SetSelection(event.Selection - 1)
             self.frame.combo_editor.SetSelection(event.Selection - 1)
-            ThemeImaging.Remove(name + " *")
+            ThemeImaging.Remove(conf.ModifiedTemplate % name)
             ThemeImaging.Remove(conf.UnsavedLabel)
 
         theme = conf.Themes.get(name, conf.UnsavedTheme)
@@ -616,11 +616,11 @@ class NightFall(wx.App):
             s.ToolTip = str(value)
             theme.append(value)
         ThemeImaging.Add(conf.UnsavedLabel, theme)
-        ThemeImaging.Add(conf.UnsavedName + " *", theme)
+        ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, theme)
 
         if not conf.UnsavedTheme:
             self.frame.combo_themes.Insert(conf.UnsavedLabel, 0)
-            self.frame.combo_editor.Insert(conf.UnsavedName + " *", 0)
+            self.frame.combo_editor.Insert(conf.ModifiedTemplate % conf.UnsavedName, 0)
         self.frame.combo_themes.SetSelection(0)
         self.frame.combo_editor.SetSelection(0)
         tooltip = get_theme_str(theme)
@@ -651,8 +651,8 @@ class NightFall(wx.App):
                 ThemeImaging.Remove(conf.UnsavedLabel)
                 cmb.Delete(0)
                 cmb.SetSelection(cmb.FindItem(name))
-            cmb_edit.ReplaceItem(cmb_edit.FindItem(name + " *"), name)
-            ThemeImaging.Remove(name + " *")
+            cmb_edit.ReplaceItem(cmb_edit.FindItem(conf.ModifiedTemplate % name), name)
+            ThemeImaging.Remove(conf.ModifiedTemplate % name)
             conf.UnsavedTheme = None
             conf.save()
             return
@@ -685,7 +685,7 @@ class NightFall(wx.App):
         self.frame.combo_themes.Delete(0)
         self.frame.combo_editor.Delete(0)
         ThemeImaging.Remove(conf.UnsavedLabel)
-        ThemeImaging.Remove(conf.UnsavedName + " *")
+        ThemeImaging.Remove(conf.ModifiedTemplate % conf.UnsavedName)
 
         name2 = conf.UnsavedName
         if name2 not in conf.Themes and conf.Themes:
@@ -1272,7 +1272,7 @@ class NightFall(wx.App):
 
         items = sorted(conf.Themes, key=lambda x: x.lower())
         citems = ([conf.UnsavedName] if conf.UnsavedName else []) + items
-        eitems = ([conf.UnsavedName + " *"] if conf.UnsavedName else []) + items
+        eitems = ([conf.ModifiedTemplate % conf.UnsavedName] if conf.UnsavedName else []) + items
         self.frame.combo_themes.SetItems(citems)
         self.frame.list_themes.SetItems(items)
         self.frame.combo_editor.SetItems(eitems)
