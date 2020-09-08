@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev19"
+Version = "2.0.dev20"
 
 VersionDate = "07.09.2020"
 
@@ -43,7 +43,8 @@ OptionalFileDirectives = [
     "FadeSteps", "ThemeBitmapSize", "ThemeNamedBitmapSize", 
     "WindowSlideInEnabled", "WindowSlideOutEnabled",
     "WindowSlideInStep", "WindowSlideOutStep",
-    "WindowSlideDelay", "WindowTimeout", "UnsavedLabel", "UnsavedTheme",
+    "WindowSlideDelay", "WindowTimeout",
+    "UnsavedLabel", "UnsavedName", "UnsavedTheme",
 ]
 Defaults = {}
 
@@ -165,7 +166,10 @@ HomeUrl = "https://github.com/suurjaak/NightFall"
 """Tooltip shown for the tray icon."""
 TrayTooltip = "NightFall (double-click to toggle dimming)"
 
-"""Label for unsaved theme in combobox."""
+"""Name of edited but unsaved theme."""
+UnsavedName = ""
+
+"""Label for unsaved theme in schedule combobox."""
 UnsavedLabel = " (unsaved) "
 
 """Minutes to postpone schedule by on suspending."""
