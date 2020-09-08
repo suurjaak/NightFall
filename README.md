@@ -5,7 +5,7 @@ A small tray program that can change screen brightness and colour gamma settings
 on schedule, in order to achieve a more natural feeling during late hours.
 
 Looking at a lit screen in a dark room can interfere with the sleep cycle,
-NightFall provides a warm-coloured darker screen on desktop and laptop 
+NightFall can provide a warm-coloured darker screen on desktop and laptop 
 computers alike.
 
 Comes with a number of pre-defined brightness and colour themes, you can
