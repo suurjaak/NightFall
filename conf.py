@@ -219,6 +219,11 @@ AboutText = """
     %(pyinstaller)s
   </ul>
   </p>
+
+  <p>
+  Several icons from Fugue Icons, &copy; 2010 Yusuke Kamiyamane,
+  <a href="https://p.yusukekamiyamane.com"><font color="%%(linkcolour)s">p.yusukekamiyamane.com</font></a>
+  </p>
 </font>
 """ % {"pyinstaller": '<li>PyInstaller, <a href="https://www.pyinstaller.org">'
                       '<font color="%(linkcolour)s">pyinstaller.org</font></a></li>'
