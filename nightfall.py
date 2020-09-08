@@ -491,8 +491,10 @@ class NightFall(wx.App):
             self.set_tray_icon(self.TRAYICONS[True][True])
             self.frame.cb_enabled.Disable()
             if not self.frame.Shown or self.frame.IsIconized():
-                m = wx.adv.NotificationMessage(title=conf.Title,
-                                               message="Schedule in effect.")
+                n = "" if conf.UnsavedLabel == self.frame.combo_themes.Value \
+                    else conf.ThemeName
+                m = "Schedule in effect%s." % ("" if not n else ': theme "%s"' % n)
+                m = wx.adv.NotificationMessage(title=conf.Title, message=m)
                 if self.trayicon.IsAvailable(): m.UseTaskBarIcon(self.trayicon)
                 m.Show()
             if conf.ManualEnabled: self.dimmer.toggle_manual(False)
