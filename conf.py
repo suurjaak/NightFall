@@ -71,19 +71,19 @@ BrightnessIcons = [os.path.join(ResourceDirectory, "brightness_lo.png"),
 """Clock central icon."""
 ClockIcon = os.path.join(ResourceDirectory, "icon_48x48.png")
 
-"""Tray icon when dimming is enabled."""
+"""Tray icon when theme is applied."""
 TrayIconOn = os.path.join(ResourceDirectory, "tray_on.png")
 
-"""Tray icon when dimming is disabled."""
+"""Tray icon when theme is not applied."""
 TrayIconOff = os.path.join(ResourceDirectory, "tray_off.png")
 
-"""Tray icon when dimming and schedule is on."""
+"""Tray icon when theme is applied and schedule is on."""
 TrayIconOnScheduled = os.path.join(ResourceDirectory, "tray_on_scheduled.png")
 
-"""Tray icon when dimming is off and schedule is on."""
+"""Tray icon when theme is not applied and schedule is on."""
 TrayIconOffScheduled = os.path.join(ResourceDirectory, "tray_off_scheduled.png")
 
-"""List of all tray icons by state, [dimming now|schedule enabled]."""
+"""List of all tray icons by state, [apploed now|schedule enabled]."""
 TrayIcons = [TrayIconOff, TrayIconOffScheduled, TrayIconOn, TrayIconOnScheduled]
 
 """Number of seconds before settings window is hidden on losing focus."""
@@ -114,10 +114,10 @@ system calls to fail for unknown reason.
 """
 ValidColourRange = (59, 255)
 
-"""Whether dimming is manually enabled."""
+"""Whether theme is manually applied."""
 ManualEnabled = False
 
-"""Whether time-scheduled automatic dimming is enabled."""
+"""Whether theme is applied automatically on schedule."""
 ScheduleEnabled = False
 
 """Whether NightFall runs at computer startup."""
@@ -148,11 +148,11 @@ Themes = {
     "fireside":    [255, 128, 128, 128],
 }
 
-"""The dimming schedule, [1,0,..] per each minute."""
+"""Auto-apply schedule, [1,0,..] per each quarter hour."""
 Schedule = []
 
 """
-The default dimming schedule, [1,0,..] per each quarter hour
+The default schedule, [1,0,..] per each quarter hour
 (21->05 on, 06->20 off).
 """
 DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
@@ -164,7 +164,7 @@ SuspendedUntil = None
 HomeUrl = "https://github.com/suurjaak/NightFall"
 
 """Tooltip shown for the tray icon."""
-TrayTooltip = "NightFall (double-click to toggle dimming)"
+TrayTooltip = "NightFall (double-click to toggle colour theme)"
 
 """Name of edited but unsaved theme."""
 UnsavedName = ""
@@ -174,6 +174,9 @@ UnsavedLabel = " (unsaved) "
 
 """String template for modified unsaved theme, with name placeholder."""
 ModifiedTemplate = "%s *"
+
+"""String template for suspended info, with time placeholder."""
+SuspendedTemplate = "Suspended until %s"
 
 """Minutes to postpone schedule by on suspending."""
 SuspendInterval = 20

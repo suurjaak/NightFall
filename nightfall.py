@@ -508,7 +508,7 @@ class NightFall(wx.App):
         elif "SUSPEND TOGGLED" == topic:
             if data:
                 dt = conf.SuspendedUntil.strftime("%H:%M")
-                self.frame.label_suspend.Label    = "Suspended until %s" % dt
+                self.frame.label_suspend.Label    = conf.SuspendedTemplate % dt
                 self.frame.button_suspend.Label   = conf.SuspendOffLabel
                 self.frame.button_suspend.ToolTip = conf.SuspendOffToolTip
                 self.frame.label_suspend.Show()
@@ -824,7 +824,9 @@ class NightFall(wx.App):
         item.Check(conf.ScheduleEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
         if conf.ScheduleEnabled:
-            label = conf.SuspendOnLabel.strip().replace("u", "&u", 1)
+            if conf.SuspendedUntil:
+                label = conf.SuspendedTemplate % conf.SuspendedUntil.strftime("%H:%M")
+            else: label = conf.SuspendOnLabel.strip().replace("u", "&u", 1)
             label = re.sub("\s+", " ", label)
             item = menu.Append(-1, label, kind=wx.ITEM_CHECK)
             item.Check(bool(conf.SuspendedUntil))
