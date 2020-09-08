@@ -59,8 +59,6 @@ class Dimmer(object):
     THEME STEPPED       dimming fade step has been applied             data=steppedtheme
     """
 
-    """Seconds between checking whether to apply/unapply schedule."""
-    INTERVAL = 30
 
     def __init__(self, event_handler):
         self.handler = event_handler
@@ -79,7 +77,7 @@ class Dimmer(object):
 
         self.timer = wx.Timer()
         self.timer.Bind(wx.EVT_TIMER, self.on_timer, self.timer)
-        self.timer.Start(milliseconds=1000 * self.INTERVAL)
+        self.timer.Start(milliseconds=1000 * conf.TimerInterval)
 
 
     def validate_conf(self):

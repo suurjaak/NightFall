@@ -41,7 +41,7 @@ FileDirectives = [
 """List of user-modifiable attributes, saved if changed from default."""
 OptionalFileDirectives = [
     "FadeSteps", "ModifiedTemplate", "ThemeBitmapSize", "ThemeNamedBitmapSize", 
-    "WindowSlideInEnabled", "WindowSlideOutEnabled",
+    "TimerInterval", "WindowSlideInEnabled", "WindowSlideOutEnabled",
     "WindowSlideInStep", "WindowSlideOutStep",
     "WindowSlideDelay", "WindowTimeout",
     "UnsavedLabel", "UnsavedName", "UnsavedTheme",
@@ -85,6 +85,9 @@ TrayIconOffScheduled = os.path.join(ResourceDirectory, "tray_off_scheduled.png")
 
 """List of all tray icons by state, [apploed now|schedule enabled]."""
 TrayIcons = [TrayIconOff, TrayIconOffScheduled, TrayIconOn, TrayIconOnScheduled]
+
+"""Seconds between checking whether to apply/unapply schedule."""
+TimerInterval = 10
 
 """Number of seconds before settings window is hidden on losing focus."""
 WindowTimeout = 30
