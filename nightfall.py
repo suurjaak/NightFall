@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    07.09.2020
+@modified    08.09.2020
 """
 import collections
 import copy
@@ -93,16 +93,23 @@ class Dimmer(object):
                     return False
             return 0 <= theme[-1] <= 255
 
+        def is_var_valid(name):
+            v, v0 = getattr(conf, name), conf.Defaults[name]
+            return len(v) == len(v0) \
+                   and all(isinstance(a, type(b)) for a, b in zip(v, v0)) \
+                   if isinstance(v, (list, tuple)) and isinstance(v0, (list, tuple)) \
+                   else isinstance(v, type(v0))
+
         if not is_theme_valid(conf.UnsavedTheme):
             conf.UnsavedTheme = None
         if not isinstance(conf.Themes, dict):
             conf.Themes = copy.deepcopy(conf.Defaults["Themes"])
         for name, theme in conf.Themes.items():
             if not name or not is_theme_valid(theme): conf.Themes.pop(name)
-        if conf.ThemeName and conf.ThemeName not in conf.Themes:
+        if conf.ThemeName is not None and conf.ThemeName not in conf.Themes:
             conf.ThemeName = None
         if not conf.UnsavedTheme and not conf.ThemeName and conf.Themes:
-            conf.ThemeName = sorted(conf.Themes)[0]
+            conf.ThemeName = sorted(conf.Themes, lambda x: x.lower())[0]
         if not conf.UnsavedTheme and not conf.Themes:
             conf.UnsavedTheme = conf.Defaults["Themes"][conf.Defaults["ThemeName"]]
         if conf.UnsavedTheme:
@@ -113,6 +120,8 @@ class Dimmer(object):
                 if not conf.ThemeName: conf.ThemeName = name
         conf.ScheduleEnabled = bool(conf.ScheduleEnabled)
         conf.ManualEnabled   = bool(conf.ManualEnabled)
+        for n in (x for x in conf.OptionalFileDirectives if x != "UnsavedTheme"):
+            if not is_var_valid(n): setattr(conf, n, conf.Defaults[n])
 
         if not isinstance(conf.Schedule, list) \
         or len(conf.Schedule) != len(conf.DefaultSchedule):
