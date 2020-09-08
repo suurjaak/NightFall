@@ -56,6 +56,7 @@ class Dimmer(object):
     STARTUP POSSIBLE    can program be added to system startup         data=enabled
     STARTUP TOGGLED     running program at system startup has changed  data=enabled
     THEME CHANGED       dimming theme has changed                      data=theme
+    THEME STEPPED       dimming fade step has been applied             data=steppedtheme
     """
 
     """Seconds between checking whether to apply/unapply schedule."""
@@ -109,7 +110,7 @@ class Dimmer(object):
         if conf.ThemeName is not None and conf.ThemeName not in conf.Themes:
             conf.ThemeName = None
         if not conf.UnsavedTheme and not conf.ThemeName and conf.Themes:
-            conf.ThemeName = sorted(conf.Themes, lambda x: x.lower())[0]
+            conf.ThemeName = sorted(conf.Themes, key=lambda x: x.lower())[0]
         if not conf.UnsavedTheme and not conf.Themes:
             conf.UnsavedTheme = conf.Defaults["Themes"][conf.Defaults["ThemeName"]]
         if conf.UnsavedTheme:
@@ -177,6 +178,9 @@ class Dimmer(object):
             if not conf.SuspendedStart:
                 theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
                 msg = "SCHEDULE IN EFFECT"
+        elif conf.SuspendedStart:
+            conf.SuspendedStart = None
+            self.post_event("SUSPEND TOGGLED", False)
         if theme != self.current_theme:
             self.apply_theme(theme, fade=True)
             self.post_event(msg)
@@ -363,14 +367,15 @@ class Dimmer(object):
         else:
             current_theme = map(int, map(round, self.fade_current_theme))
         success = self.apply_theme(current_theme)
-        if success and self.should_dim() \
-        and self.fade_original_theme != conf.NormalTheme:
-            # Send incremental change if fading from one theme to another.
-            self.post_event("THEME CHANGED", current_theme, self.fade_info)
-        elif not success:
-            if not self.fade_steps:
-                # Unsupported theme: jump back to normal on last step.
-                self.apply_theme(conf.NormalTheme, fade=False)
+        if success and self.fade_steps:
+            # Send incremental change if fading from one theme to another
+            self.post_event("THEME STEPPED", current_theme)
+        elif success:
+            self.post_event("THEME APPLIED", self.fade_target_theme)
+        else:
+            # Unsupported theme: jump back to normal on last step.
+            self.apply_theme(conf.NormalTheme, fade=False)
+            self.post_event("THEME APPLIED", conf.NormalTheme)
         if self.fade_steps:
             self.fade_timer = wx.CallLater(conf.FadeDelay, self.on_fade_step)
         else:
@@ -433,8 +438,8 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_CHAR_HOOK,  self.on_key)
         frame.Bind(wx.EVT_SYS_COLOUR_CHANGED, self.on_sys_colour_change)
         for s in frame.sliders:
-            frame.Bind(wx.EVT_SCROLL, self.on_change_theme_detail, s)
-            frame.Bind(wx.EVT_SLIDER, self.on_change_theme_detail, s)
+            frame.Bind(wx.EVT_SCROLL, self.on_change_theme_slider, s)
+            frame.Bind(wx.EVT_SLIDER, self.on_change_theme_slider, s)
         self.Bind(EVT_DIMMER,         self.on_dimmer_event)
         self.Bind(wx.EVT_LEFT_DCLICK, self.on_toggle_console, frame.label_combo)
 
@@ -460,20 +465,16 @@ class NightFall(wx.App):
 
 
     def on_dimmer_event(self, event):
-        """Handler for all events sent from Dimmer, updates UI controls."""
+        """Handler for all events sent from Dimmer, updates UI state."""
         topic, data, info = event.Topic, event.Data, event.Info
-        if "THEME CHANGED" == topic:
-            for i, g in enumerate(data):
-                self.frame.sliders[i].SetValue(g)
-                self.frame.sliders[i].ToolTip = str(g)
-            bmp, tooltip = get_theme_bitmap(data, border=True), get_theme_str(data)
-            #for b in [self.frame.bmp_detail]: b.Bitmap, b.ToolTip = bmp, tooltip @todo
-            self.frame.label_error.Hide()
-        elif "THEME FAILED" == topic:
+        if "THEME FAILED" == topic:
             ThemeImaging.Add(conf.ThemeName or conf.UnsavedLabel, data, supported=False)
-            bmp = ThemeImaging.GetBitmap(conf.ThemeName or conf.UnsavedLabel, border=True)
-            tooltip = get_theme_str(data, supported=False)
-            #for b in [self.frame.bmp_detail]: b.Bitmap, b.ToolTip = bmp, tooltip @todo
+            if conf.UnsavedTheme:
+                ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, data, supported=False)
+            self.frame.combo_themes.ToolTip = get_theme_str(data, supported=False)
+            if not conf.ThemeName or conf.ThemeName == conf.UnsavedName:
+                self.frame.combo_editor.ToolTip = self.frame.combo_themes.ToolTip
+
             self.frame.label_error.Label = "Setting unsupported by hardware."
             self.frame.label_error.Show()
             self.frame.label_error.ContainingSizer.Layout()
@@ -497,11 +498,12 @@ class NightFall(wx.App):
                 m = wx.adv.NotificationMessage(title=conf.Title, message=m)
                 if self.trayicon.IsAvailable(): m.UseTaskBarIcon(self.trayicon)
                 m.Show()
-            if conf.ManualEnabled: self.dimmer.toggle_manual(False)
             self.frame.button_suspend.Label   = conf.SuspendOnLabel
             self.frame.button_suspend.ToolTip = conf.SuspendOnToolTip
             self.frame.button_suspend.Show()
             self.frame.button_suspend.ContainingSizer.Layout()
+            # @todo see võiks mitte siin olla, siin võiks aint UI update teha
+            if conf.ManualEnabled: wx.CallAfter(self.dimmer.toggle_manual, False)
         elif "SUSPEND TOGGLED" == topic:
             if data:
                 dt = conf.SuspendedStart.strftime("%H:%M")
@@ -510,7 +512,7 @@ class NightFall(wx.App):
                 self.frame.button_suspend.ToolTip = conf.SuspendOffToolTip
                 self.frame.label_suspend.Show()
                 self.frame.button_suspend.Show()
-            elif conf.ScheduleEnabled:
+            elif self.dimmer.should_dim_scheduled():
                 self.frame.button_suspend.Label   = conf.SuspendOnLabel
                 self.frame.button_suspend.ToolTip = conf.SuspendOnToolTip
                 self.frame.label_suspend.Hide()
@@ -528,17 +530,18 @@ class NightFall(wx.App):
         elif "NORMAL DISPLAY" == topic:
             self.set_tray_icon(self.TRAYICONS[False][conf.ScheduleEnabled])
             self.frame.cb_enabled.Enable()
+            self.frame.label_suspend.Hide()
+            self.frame.button_suspend.Hide()
 
-        if "THEME APPLIED" in (topic, info):
-            idx = self.frame.combo_themes.FindItem(conf.ThemeName or conf.UnsavedLabel)
-            if idx >= 0:
-                self.frame.combo_themes.SetSelection(idx)
-                theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-                self.frame.combo_themes.ToolTip = get_theme_str(theme)
+        if set(("THEME APPLIED", "THEME CHANGED")) & set((topic, info)):
+            if not conf.ThemeName:
+                ThemeImaging.Add(conf.UnsavedLabel, data)
+                ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, data)
+            self.frame.label_error.Hide()
 
 
     def modal(self, func, *args, **kwargs):
-        """Invokes a function while setting modal-flag on window."""
+        """Invokes a function while setting window modal-flag, returns result."""
         self.frame_has_modal = True
         try: return func(*args, **kwargs)
         finally: self.frame_has_modal = False
@@ -574,41 +577,49 @@ class NightFall(wx.App):
         name = self.frame.combo_themes.GetItemValue(event.Selection)
         theme = conf.Themes.get(name, conf.UnsavedTheme)
         conf.ThemeName = name if name != conf.UnsavedLabel else None
-        self.dimmer.set_theme(theme, "THEME APPLIED")
+        self.dimmer.set_theme(theme, "THEME CHANGED")
 
 
     def on_select_combo_editor(self, event):
         """Handler for selecting an item in editor combobox."""
 
-        name = self.frame.combo_editor.GetItemValue(event.Selection)
+        cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
+        name = cmb2.GetItemValue(event.Selection)
         if conf.UnsavedTheme and not event.Selection: name = conf.UnsavedName
 
-        if event.Selection and conf.UnsavedTheme and conf.UnsavedName \
+        if event.Selection and conf.UnsavedTheme \
         and conf.Themes.get(conf.UnsavedName) != conf.UnsavedTheme \
-        and wx.OK != self.modal(wx.MessageBox, 'Theme "%s" has changed, '
-            'are you sure you want to discard changes?' % conf.UnsavedName,
+        and wx.OK != self.modal(wx.MessageBox, 'Theme%s has changed, '
+            'are you sure you want to discard changes?' %
+            (' "%s"' % conf.UnsavedName if conf.UnsavedName else ""),
             conf.Title, wx.OK | wx.CANCEL | wx.ICON_INFORMATION
         ):
             self.frame.combo_editor.SetSelection(0)
             return
+
         if event.Selection and conf.UnsavedTheme:
+            # Selecting saved, unsaved exists: discard unsaved
             conf.UnsavedTheme = None
-            self.frame.combo_themes.Delete(0)
-            self.frame.combo_editor.Delete(0)
-            self.frame.combo_themes.SetSelection(event.Selection - 1)
-            self.frame.combo_editor.SetSelection(event.Selection - 1)
+            for c in cmb, cmb2:
+                c.Delete(0), c.SetSelection(event.Selection - 1)
+            cmb.ToolTip = get_theme_str(conf.Themes[cmb.Value])
             ThemeImaging.Remove(conf.ModifiedTemplate % name)
             ThemeImaging.Remove(conf.UnsavedLabel)
 
         theme = conf.Themes.get(name, conf.UnsavedTheme)
         conf.UnsavedName = name
         conf.UnsavedTheme = None if name in conf.Themes else theme
-        self.frame.combo_editor.ToolTip = get_theme_str(theme)
-        self.dimmer.set_theme(theme, "THEME MODIFIED")
+        cmb2.ToolTip = get_theme_str(theme)
+        for s, v in zip(self.frame.sliders, theme): s.Value, s.ToolTip = v, str(v)
+        if self.dimmer.should_dim():
+            conf.ThemeName = name
+            cmb.SetSelection(cmb.FindItem(name))
+            self.dimmer.toggle_suspend(False)
+            self.dimmer.set_theme(theme, "THEME CHANGED")
 
 
-    def on_change_theme_detail(self, event):
-        """Handler for a change in colour theme properties."""
+    def on_change_theme_slider(self, event):
+        """Handler for a change in theme component slider."""
         theme = []
         for s in self.frame.sliders:
             new = isinstance(event, wx.ScrollEvent) and s is event.EventObject
@@ -618,17 +629,19 @@ class NightFall(wx.App):
         ThemeImaging.Add(conf.UnsavedLabel, theme)
         ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, theme)
 
+        cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
         if not conf.UnsavedTheme:
-            self.frame.combo_themes.Insert(conf.UnsavedLabel, 0)
-            self.frame.combo_editor.Insert(conf.ModifiedTemplate % conf.UnsavedName, 0)
-        self.frame.combo_themes.SetSelection(0)
-        self.frame.combo_editor.SetSelection(0)
-        tooltip = get_theme_str(theme)
-        self.frame.combo_themes.ToolTip = tooltip
-        self.frame.combo_editor.ToolTip = tooltip
+            cmb.Insert(conf.UnsavedLabel, 0)
+            cmb2.Insert(conf.ModifiedTemplate % conf.UnsavedName, 0)
         conf.UnsavedTheme = theme
-        self.dimmer.toggle_suspend(False)
-        self.dimmer.set_theme(theme, "THEME MODIFIED")
+        cmb2.SetSelection(0)
+        cmb2.ToolTip = get_theme_str(theme)
+        if self.dimmer.should_dim():
+            conf.ThemeName = None
+            cmb.SetSelection(0)
+            cmb.ToolTip = cmb2.ToolTip
+            self.dimmer.toggle_suspend(False)
+            self.dimmer.set_theme(theme, "THEME MODIFIED")
 
 
     def on_save_theme(self, event=None):
@@ -644,32 +657,36 @@ class NightFall(wx.App):
         name = dlg.GetValue().strip()
         if not name: return
 
-        lst, cmb = self.frame.list_themes, self.frame.combo_themes
-        cmb_edit = self.frame.combo_editor
+        ThemeImaging.Remove(conf.UnsavedLabel)
+        ThemeImaging.Remove(conf.ModifiedTemplate % name0)
+        cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
         if theme == conf.Themes.get(name): # No change
             if conf.UnsavedTheme:
-                ThemeImaging.Remove(conf.UnsavedLabel)
-                cmb.Delete(0)
-                cmb.SetSelection(cmb.FindItem(name))
-            cmb_edit.ReplaceItem(cmb_edit.FindItem(conf.ModifiedTemplate % name), name)
-            ThemeImaging.Remove(conf.ModifiedTemplate % name)
-            conf.UnsavedTheme = None
-            conf.save()
+                cmb_v = cmb.Value
+                for c in cmb, cmb2: c.Delete(0)
+                if cmb_v == conf.UnsavedLabel: cmb.SetSelection(cmb.FindItem(name))
+                cmb2.SetSelection(cmb2.FindItem(name))
+                conf.UnsavedTheme = None
+                conf.save()
             return
 
         theme_existed = name in conf.Themes
         if theme_existed and wx.OK != self.modal(wx.MessageBox,
-            'Theme named "%s" already exists, are you sure you want to overwrite it?' % name,
+            'Theme "%s" already exists, are you sure you want to overwrite it?' % name,
             conf.Title, wx.OK | wx.CANCEL | wx.ICON_INFORMATION
         ): return
 
-        conf.ThemeName, conf.Themes[name], conf.UnsavedTheme = name, theme, None
-        conf.save()
-        ThemeImaging.Remove(conf.UnsavedLabel)
+        conf.Themes[name] = theme
+        conf.UnsavedName, conf.UnsavedTheme = name, None
+        if not conf.ThemeName: conf.ThemeName = name
         ThemeImaging.Add(name, theme)
-        choices = sorted(conf.Themes, key=lambda x: x.lower())
-        for c in cmb, lst, cmb_edit: c.SetItems(choices)
-        for c in cmb, lst, cmb_edit: c.SetSelection(c.FindItem(name))
+        items = sorted(conf.Themes, key=lambda x: x.lower())
+        cmb_v, lst_v = (c.Value for c in (cmb, self.frame.list_themes))
+        if conf.UnsavedLabel == cmb_v: cmb_v = name
+        for c in cmb, cmb2, self.frame.list_themes: c.SetItems(items)
+        cmb.SetSelection(cmb.FindItem(name))
+        cmb2.SetSelection(cmb2.FindItem(name))
+        self.frame.list_themes.SetSelection(self.frame.list_themes.FindItem(lst_v))
         self.frame.button_restore.Shown = any(
             conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
         self.frame.button_restore.ContainingSizer.Layout()
@@ -677,13 +694,13 @@ class NightFall(wx.App):
 
     def on_reset_theme(self, event=None):
         """Resets the currently set rgb+brightness values in theme editor."""
-        if not conf.UnsavedTheme: return
+        if not conf.UnsavedName or not conf.UnsavedTheme: return
 
+        cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
         conf.UnsavedTheme = None
-        was_theme_selected = (self.frame.combo_themes.Value == conf.UnsavedLabel)
-        was_theme_applied = was_theme_selected and self.dimmer.should_dim()
-        self.frame.combo_themes.Delete(0)
-        self.frame.combo_editor.Delete(0)
+        was_unsaved_selected = (cmb.Value == conf.UnsavedLabel)
+        cmb.Delete(0)
+        cmb2.Delete(0)
         ThemeImaging.Remove(conf.UnsavedLabel)
         ThemeImaging.Remove(conf.ModifiedTemplate % conf.UnsavedName)
 
@@ -693,16 +710,17 @@ class NightFall(wx.App):
         if name2 in conf.Themes:
             theme2 = conf.Themes[name2]
         else:
-            name2 = ""
-            theme2 = conf.Defaults["Themes"][conf.Defaults["ThemeName"]]
+            name2, theme2 = "", conf.Defaults["Themes"][conf.Defaults["ThemeName"]]
 
         conf.UnsavedName = name2
-        if was_theme_selected:
-            self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name2))
+        cmb2.SetSelection(cmb2.FindItem(name2))
+        cmb2.ToolTip = get_theme_str(theme2)
+        for s, v in zip(self.frame.sliders, theme2): s.Value, s.ToolTip = v, str(v)
+        if was_unsaved_selected:
+            cmb.SetSelection(cmb.FindItem(name2))
+            cmb.ToolTip = cmb2.ToolTip
             if self.dimmer.should_dim():
                 self.dimmer.apply_theme(theme2, fade=True)
-        self.frame.combo_editor.SetSelection(self.frame.combo_editor.FindItem(name2))
-        self.frame.combo_editor.ToolTip = get_theme_str(theme2)
 
 
     def on_delete_theme(self, event=None):
@@ -711,7 +729,7 @@ class NightFall(wx.App):
         if selected < 0: return
 
         name = self.frame.list_themes.GetItemValue(selected)
-        theme = conf.Themes.get(name)
+        theme = conf.Themes[name]
         resp = self.modal(wx.MessageBox, 'Delete theme "%s"?' % name,
                           conf.Title, wx.OK | wx.CANCEL | wx.ICON_WARNING)
         self.frame.list_themes.SetFocus()
@@ -719,29 +737,56 @@ class NightFall(wx.App):
 
         conf.Themes.pop(name, None)
         ThemeImaging.Remove(name)
+        ThemeImaging.Remove(conf.ModifiedTemplate % name)
         self.frame.list_themes.RemoveItemAt(selected)
+        self.frame.list_themes.SetSelection(min(selected, len(conf.Themes)))
         self.frame.list_themes.Refresh()
+        self.frame.button_apply.Enabled  = bool(self.frame.list_themes.GetItemCount())
+        self.frame.button_delete.Enabled = bool(self.frame.list_themes.GetItemCount())
         self.frame.button_restore.Shown = any(
             conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
         self.frame.button_restore.ContainingSizer.Layout()
-        if self.dimmer.should_dim() and name == conf.ThemeName:
+
+        if self.dimmer.should_dim() and (conf.ThemeName or conf.UnsavedName) == name:
+            self.dimmer.toggle_schedule(False)
             self.dimmer.toggle_manual(False)
 
-        idx, idx2 = self.frame.combo_themes.FindItem(name), -1
-        if idx >= 0:
-            self.frame.combo_themes.Delete(idx)
-            idx2 = self.frame.combo_themes.GetSelection()
-        if idx2 >= 0:
-            name2 = self.frame.combo_themes.GetItemValue(idx2)
-            conf.ThemeName = name2 if name2 != conf.UnsavedLabel else None
+        cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
+        was_unsaved = conf.UnsavedTheme and conf.UnsavedName == name
+
+        for c in cmb2, cmb:
+            # Drop theme from combos, selecting another if was selected
+            idx = c.FindItem(name)
+            was_selected = conf.UnsavedTheme and not c.GetSelection() \
+                           or (idx >= 0) and c.GetSelection() == idx
+            c.Delete(idx)
+            if was_unsaved: c.Delete(0) # Both combos have unsaved-item
+
+            if was_selected and c.GetCount():
+                idx2 = max(0, min(selected - bool(was_unsaved), c.GetCount() - 1))
+                c.SetSelection(idx2)
+                name2, theme2 = c.Value, conf.Themes[c.Value]
+                if c is cmb:
+                    conf.ThemeName = name2
+                    self.dimmer.set_theme(theme2, "THEME CHANGED")
+                else:
+                    conf.UnsavedName = name2
+                    if was_unsaved: conf.UnsavedTheme = None
+                    for s, v in zip(self.frame.sliders, theme2):
+                        s.Value, s.ToolTip = v, str(v)
+                c.ToolTip = get_theme_str(theme2)
+
         if not conf.Themes and not conf.UnsavedTheme:
-            conf.ThemeName = None
-            conf.UnsavedTheme = theme
+            # Deleted last theme and nothing being modified: add something at least
+            conf.ThemeName, conf.UnsavedName, conf.UnsavedTheme = None, "", theme
             ThemeImaging.Add(conf.UnsavedLabel, theme)
-            self.frame.combo_themes.Insert(conf.UnsavedLabel, 0)
-            self.frame.combo_themes.SetSelection(0)
-            self.frame.combo_themes.ToolTip = get_theme_str(theme)
-            self.frame.button_apply.Disable(); self.frame.button_delete.Disable()
+            ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, theme)
+            for c in cmb, cmb2:
+                n = conf.UnsavedLabel if c is cmb else conf.ModifiedTemplate % conf.UnsavedName
+                c.Insert(n, 0)
+                c.SetSelection(0)
+                c.ToolTip = get_theme_str(theme)
+            self.dimmer.set_theme(theme, "THEME CHANGED")
         conf.save()
 
 
@@ -1266,28 +1311,33 @@ class NightFall(wx.App):
             ThemeImaging.Add(name, theme)
         if conf.UnsavedTheme:
             ThemeImaging.Add(conf.UnsavedLabel, conf.UnsavedTheme)
+            ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, conf.UnsavedTheme)
         self.frame.button_restore.Shown = any(
             conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
         self.frame.button_restore.ContainingSizer.Layout()
 
+        cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
         items = sorted(conf.Themes, key=lambda x: x.lower())
-        citems = ([conf.UnsavedName] if conf.UnsavedName else []) + items
-        eitems = ([conf.ModifiedTemplate % conf.UnsavedName] if conf.UnsavedName else []) + items
-        self.frame.combo_themes.SetItems(citems)
+        citems = ([conf.UnsavedLabel] if conf.UnsavedTheme else []) + items
+        eitems = ([conf.ModifiedTemplate % conf.UnsavedName] if conf.UnsavedTheme else []) + items
+        cmb.SetItems(citems)
         self.frame.list_themes.SetItems(items)
-        self.frame.combo_editor.SetItems(eitems)
+        cmb2.SetItems(eitems)
 
-        names = filter(bool, [conf.ThemeName, conf.UnsavedName, conf.UnsavedLabel])
-        ctrls = self.frame.combo_themes, self.frame.list_themes, self.frame.combo_editor
-        for ctrl in ctrls:
+        names = filter(bool, [conf.ThemeName, conf.UnsavedLabel,
+                              conf.ModifiedTemplate % conf.UnsavedName
+                              if conf.UnsavedTheme else ""])
+        for ctrl in cmb, cmb2, self.frame.list_themes:
             idx = next((i for n in names for i in [ctrl.FindItem(n)] if i >= 0), -1)
             if idx >= 0: ctrl.SetSelection(idx)
-            if isinstance(ctrl, BitmapComboBox):
+            if idx >= 0 and isinstance(ctrl, BitmapComboBox):
                 theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
                 ctrl.ToolTip = get_theme_str(theme)
-        if conf.UnsavedName:
-            self.frame.combo_editor.SetSelection(self.frame.combo_editor.FindItem(conf.UnsavedName))
-        conf.UnsavedName = self.frame.combo_editor.GetValue()
+        if not conf.UnsavedTheme:
+            conf.UnsavedName = cmb2.GetItemValue(cmb2.GetSelection())
+
+        theme = conf.Themes.get(cmb.Value, conf.UnsavedTheme)
+        for s, v in zip(self.frame.sliders, theme): s.Value, s.ToolTip = v, str(v)
 
         self.frame.button_apply.Enabled  = (idx >= 0)
         self.frame.button_delete.Enabled = (idx >= 0)
@@ -1798,8 +1848,7 @@ class BitmapComboBox(wx.adv.OwnerDrawnComboBox):
 
     def Delete(self, n):
         """Deletes the item with specified index."""
-        if not self._items or n >= len(self._items): return
-        if n < 0: n %= len(self._items)
+        if not (0 <= n < len(self._items)): return
         super(BitmapComboBox, self).Delete(n)
         del self._items[n]
         self.SetSelection(min(n, len(self._items) - 1))
@@ -1871,8 +1920,19 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
 
     def GetItemValue(self, index):
         """Returns item value at specified index."""
+        if not (0 <= index < self.GetItemCount()): return
         thumb = self.GetItem(index)
         if thumb: return thumb.GetFileName()
+
+
+    def GetValue(self):
+        """Returns value of the currently selected item, if any."""
+        return self.GetItemValue(self.GetSelection())                
+    def SetValue(self, value):
+        """Sets selection to the specified value if present."""
+        idx = self.FindItem(value)
+        if idx >= 0: self.SetSelection(idx)
+    Value = property(GetValue, SetValue)
 
 
     def FindItem(self, value):
@@ -2230,22 +2290,21 @@ def get_theme_bitmap(theme, supported=True, border=False, label=None):
                        wx.FONTWEIGHT_BOLD, faceName="Terminal"))
     ctext = "#%2X%2X%2X" % tuple(theme[:-1])
     cwidth, cheight = dc.GetTextExtent(ctext)
-    dc.SetBrush(wx.WHITE_BRUSH)
-    dc.SetPen(wx.WHITE_PEN)
+    dc.Brush, dc.Pen = wx.WHITE_BRUSH, wx.WHITE_PEN
     ystart = conf.ThemeBitmapSize[1] - cheight
     dc.DrawRectangle(0, ystart - 3, *bmp.Size)
-    dc.SetPen(wx.LIGHT_GREY_PEN) # Draw separator above colour code
-    dc.DrawLine(0, bmp.Size[1] - cheight - 3, bmp.Size[0], bmp.Size[1] - cheight - 3)
+    dc.Pen = wx.LIGHT_GREY_PEN # Draw separator above colour code
+    dc.DrawLine(0, ystart - 4, bmp.Size[0], ystart - 4)
     dc.SetTextForeground(wx.BLACK if supported else wx.RED)
     dc.DrawText(ctext, (bmp.Size[0] - cwidth) / 2 - 1, ystart - 1)
+    dc.DrawLine(0, ystart + cheight, bmp.Size[0], ystart + cheight)
 
     if border: # Draw outer border
-        dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.SetPen(wx.LIGHT_GREY_PEN)
+        dc.Brush, dc.Pen = wx.TRANSPARENT_BRUSH, wx.LIGHT_GREY_PEN
         dc.DrawRectangle(0, 0, *bmp.Size)
 
     if not supported: # Draw unsupported cross-through
-        dc.SetPen(wx.RED_PEN)
+        dc.Pen = wx.RED_PEN
         dc.DrawLine(0, 0, *conf.ThemeBitmapSize)
         dc.DrawLine(0, conf.ThemeBitmapSize[1], size[0], 0)
 
