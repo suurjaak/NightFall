@@ -1196,6 +1196,7 @@ class NightFall(wx.App):
             size=(-1, 16), style=wx.html.HW_SCROLLBAR_NEVER)
         ColourManager.Manage(label_suspend, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         label_suspend.SetBorders(0)
+        label_suspend.ToolTip = "Click link to change interval"
         label_suspend.Hide()
         frame.button_suspend = wx.Button(panel_config, label=conf.SuspendOnLabel)
         frame.button_suspend.ToolTip = conf.SuspendOnToolTip
