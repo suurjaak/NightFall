@@ -576,6 +576,7 @@ class NightFall(wx.App):
 
         name = self.frame.list_themes.GetItemValue(selected)
         conf.ThemeName = name
+        self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name))
         if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
         self.dimmer.toggle_suspend(False)
         self.dimmer.set_theme(conf.Themes[name], "THEME APPLIED")
@@ -808,6 +809,7 @@ class NightFall(wx.App):
             if not event.IsChecked(): return
             if name == self.unsaved_name(): name = None
             conf.ThemeName = name
+            self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name))
             if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
             self.dimmer.toggle_suspend(False)
             self.dimmer.set_theme(theme, "THEME APPLIED")
