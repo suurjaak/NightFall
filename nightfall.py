@@ -426,7 +426,7 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_BUTTON,     self.on_toggle_suspend,      frame.button_suspend)
         frame.Bind(wx.EVT_COMBOBOX,   self.on_select_combo_themes, frame.combo_themes)
         frame.Bind(wx.EVT_COMBOBOX,   self.on_select_combo_editor, frame.combo_editor)
-        frame.label_suspend.Bind(wx.html.EVT_HTML_LINK_CLICKED, self.on_click_suspend)
+        frame.label_suspend.Bind(wx.html.EVT_HTML_LINK_CLICKED, self.on_change_suspend)
         frame.link_www.Bind(wx.html.EVT_HTML_LINK_CLICKED,
                             lambda e: webbrowser.open(e.GetLinkInfo().Href))
         frame.label_about.Bind(wx.html.EVT_HTML_LINK_CLICKED,
@@ -686,6 +686,7 @@ class NightFall(wx.App):
         conf.Themes[name] = theme
         conf.UnsavedName, conf.UnsavedTheme = name, None
         if not conf.ThemeName: conf.ThemeName = name
+        conf.save()
         ThemeImaging.Add(name, theme)
         items = sorted(conf.Themes, key=lambda x: x.lower())
         lst_v = self.frame.list_themes.Value
@@ -718,6 +719,7 @@ class NightFall(wx.App):
             name2, theme2 = "", conf.Defaults["Themes"][conf.Defaults["ThemeName"]]
 
         conf.UnsavedName = name2
+        conf.save()
         cmb2.SetSelection(cmb2.FindItem(name2))
         cmb2.ToolTip = get_theme_str(theme2)
         for s, v in zip(self.frame.sliders, theme2): s.Value, s.ToolTip = v, str(v)
@@ -808,6 +810,7 @@ class NightFall(wx.App):
             if not event.IsChecked(): return
             if name == self.unsaved_name(): name = None
             conf.ThemeName = name
+            conf.save()
             self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name))
             if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
             self.dimmer.toggle_suspend(False)
@@ -829,7 +832,7 @@ class NightFall(wx.App):
         item = wx.MenuItem(menu, -1, "Apply &now", kind=wx.ITEM_CHECK)
         item.Font = self.frame.Font.Bold()
         menu.Append(item)
-        item.Check(is_dimming)
+        item.Check(is_dimming and not self.dimmer.should_dim_scheduled())
         menu.Bind(wx.EVT_MENU, self.on_toggle_manual, id=item.GetId())
 
         item = wx.MenuItem(menu, -1, "Apply on &schedule", kind=wx.ITEM_CHECK)
@@ -1102,7 +1105,7 @@ class NightFall(wx.App):
             self.frame.label_suspend.SetPage(conf.SuspendedHTMLTemplate % args)
 
 
-    def on_click_suspend(self, event):
+    def on_change_suspend(self, event):
         """Handler for clicking time link in suspend label, opens interval choice dialog."""
         dt = conf.SuspendedUntil - datetime.timedelta(minutes=self.suspend_interval)
         choices = ["%s minutes (until %s)" % 
