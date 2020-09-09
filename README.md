@@ -21,6 +21,7 @@ Using The Program
 
 NightFall stays in the system tray as a grey or orange moon icon, depending on
 being active, dimming the screen on command or according to the set schedule.
+Schedule can be set in quarter-hour steps.
 
 Works under Windows, *might* work under Linux/OSX.
 
