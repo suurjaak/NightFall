@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev26"
+Version = "2.0.dev28"
 
 VersionDate = "09.09.2020"
 
@@ -161,7 +161,7 @@ The default schedule, [1,0,..] per each quarter hour
 """
 DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
 
-"""Datetime from which to bring schedule into effect."""
+"""Datetime from which to apply theme."""
 SuspendedUntil = None
 
 """URL to program homepage."""
@@ -199,10 +199,10 @@ SuspendOnLabel = "\n".join(x.center(15) for x in
 SuspendOffLabel = "Unsuspend"
 
 """Activation tooltip for suspend-button."""
-SuspendOnToolTip = "Delay activating schedule for %s minutes" % SuspendIntervals[0]
+SuspendOnToolTip = "Delay applying theme for %s minutes" % SuspendIntervals[0]
 
 """Deactivation tooltip for suspend-button."""
-SuspendOffToolTip = "Apply schedule immediately"
+SuspendOffToolTip = "Apply theme immediately"
 
 """Information text shown on theme editor page."""
 InfoEditorText = (
