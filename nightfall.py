@@ -338,10 +338,10 @@ class Dimmer(object):
     def should_dim_scheduled(self, flag=False):
         """
         Whether dimming should currently be on, according to schedule.
-        Disregards suspended state unless flag is True.
+        Disregards suspended state. If flag, ignores ScheduleEnabled.
         """
         result = False
-        if conf.ScheduleEnabled or flag and conf.SuspendedUntil:
+        if conf.ScheduleEnabled or flag:
             t = datetime.datetime.now().time()
             H_MUL = len(conf.Schedule) / 24
             M_DIV = 60 / H_MUL
@@ -414,7 +414,7 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_LIST_DELETE_ITEM, self.on_delete_theme, frame.list_themes)
 
         ColourManager.Init(frame)
-        frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_manual,       frame.cb_enabled)
+        frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_manual,       frame.cb_manual)
         frame.Bind(wx.EVT_CHECKBOX,   self.on_toggle_startup,      frame.cb_startup)
         frame.Bind(wx.EVT_BUTTON,     self.on_toggle_settings,     frame.button_ok)
         frame.Bind(wx.EVT_BUTTON,     self.on_exit,                frame.button_exit)
@@ -479,7 +479,7 @@ class NightFall(wx.App):
             self.frame.label_error.ContainingSizer.Layout()
             self.frame.label_error.Wrap(self.frame.label_error.Size[0])
         elif "MANUAL TOGGLED" == topic:
-            self.frame.cb_enabled.Value = data
+            self.frame.cb_manual.Value = data
             self.set_tray_icon(self.TRAYICONS[self.dimmer.should_dim()][conf.ScheduleEnabled])
         elif "SCHEDULE TOGGLED" == topic:
             self.frame.cb_schedule.Value = data
@@ -488,7 +488,6 @@ class NightFall(wx.App):
             self.frame.selector_time.SetSelections(data)
         elif "SCHEDULE IN EFFECT" == topic:
             self.set_tray_icon(self.TRAYICONS[True][True])
-            self.frame.cb_enabled.Disable()
             if not self.frame.Shown or self.frame.IsIconized():
                 n = conf.ThemeName or ""
                 m = "Schedule in effect%s." % ("" if not n else ': theme "%s"' % n)
@@ -499,8 +498,6 @@ class NightFall(wx.App):
             self.frame.button_suspend.ToolTip = conf.SuspendOnToolTip
             self.frame.button_suspend.Show()
             self.frame.button_suspend.ContainingSizer.Layout()
-            # @todo see võiks mitte siin olla, siin võiks aint UI update teha
-            if conf.ManualEnabled: wx.CallAfter(self.dimmer.toggle_manual, False)
         elif "SUSPEND TOGGLED" == topic:
             if data:
                 args = {"graycolour": ColourManager.ColourHex(wx.SYS_COLOUR_GRAYTEXT),
@@ -533,7 +530,6 @@ class NightFall(wx.App):
             self.frame.button_suspend.ContainingSizer.Layout()
         elif "NORMAL DISPLAY" == topic:
             self.set_tray_icon(self.TRAYICONS[False][conf.ScheduleEnabled])
-            self.frame.cb_enabled.Enable()
             if not conf.SuspendedUntil:
                 self.frame.label_suspend.Hide()
                 self.frame.button_suspend.Hide()
@@ -756,6 +752,7 @@ class NightFall(wx.App):
         self.frame.button_restore.ContainingSizer.Layout()
 
         if self.dimmer.should_dim() and (conf.ThemeName or conf.UnsavedName) == name:
+            self.dimmer.toggle_suspend(False)
             self.dimmer.toggle_schedule(False)
             self.dimmer.toggle_manual(False)
 
@@ -829,16 +826,14 @@ class NightFall(wx.App):
 
 
         is_dimming = self.dimmer.should_dim()
-        is_dimming_scheduled = self.dimmer.should_dim_scheduled()
-        if not is_dimming_scheduled:
-            item = wx.MenuItem(menu, -1, "Apply &now", kind=wx.ITEM_CHECK)
-            item.Font = self.frame.Font.Bold()
-            menu.Append(item)
-            item.Check(is_dimming)
-            menu.Bind(wx.EVT_MENU, self.on_toggle_manual, id=item.GetId())
+        item = wx.MenuItem(menu, -1, "Apply &now", kind=wx.ITEM_CHECK)
+        item.Font = self.frame.Font.Bold()
+        menu.Append(item)
+        item.Check(is_dimming)
+        menu.Bind(wx.EVT_MENU, self.on_toggle_manual, id=item.GetId())
 
         item = wx.MenuItem(menu, -1, "Apply on &schedule", kind=wx.ITEM_CHECK)
-        if is_dimming_scheduled: item.Font = self.frame.Font.Bold()
+        if self.dimmer.should_dim_scheduled(): item.Font = self.frame.Font.Bold()
         menu.Append(item)
         item.Check(conf.ScheduleEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
@@ -1068,6 +1063,7 @@ class NightFall(wx.App):
         if do_dim and self.dimmer.should_dim_scheduled(flag=True):
             self.dimmer.toggle_schedule(True)
         elif not do_dim and self.dimmer.should_dim_scheduled():
+            self.dimmer.toggle_manual(False)
             self.dimmer.toggle_schedule(False)
         else: self.dimmer.toggle_manual(do_dim)
 
@@ -1140,13 +1136,13 @@ class NightFall(wx.App):
         sizer = panel.Sizer = wx.BoxSizer(wx.VERTICAL)
         sizer_checkboxes = wx.BoxSizer(wx.HORIZONTAL)
 
-        cb_enabled = frame.cb_enabled = wx.CheckBox(panel, label="Apply now")
-        cb_enabled.ToolTip = "Apply dimming settings now"
+        cb_manual = frame.cb_manual = wx.CheckBox(panel, label="Apply now")
+        cb_manual.ToolTip = "Apply dimming settings now"
         cb_schedule = frame.cb_schedule = wx.CheckBox(panel, label="Apply on schedule")
         cb_schedule.ToolTip = "Apply automatically during the highlighted hours"
         sizer_checkboxes.Add(cb_schedule)
         sizer_checkboxes.AddStretchSpacer()
-        sizer_checkboxes.Add(cb_enabled)
+        sizer_checkboxes.Add(cb_manual)
         sizer.Add(sizer_checkboxes, border=5, flag=wx.ALL | wx.GROW)
 
         notebook = frame.notebook = wx.lib.agw.flatnotebook.FlatNotebook(panel)
