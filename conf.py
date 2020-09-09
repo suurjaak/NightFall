@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev25"
+Version = "2.0.dev26"
 
 VersionDate = "09.09.2020"
 
@@ -173,7 +173,7 @@ TrayTooltip = "NightFall (double-click to toggle colour theme)"
 """Name of edited but unsaved theme."""
 UnsavedName = ""
 
-"""Label for unsaved theme in schedule combobox."""
+"""Label for unsaved and unnamed theme in schedule combobox."""
 UnsavedLabel = " (unsaved) "
 
 """String template for modified unsaved theme, with name placeholder."""

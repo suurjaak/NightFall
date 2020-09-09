@@ -470,9 +470,7 @@ class NightFall(wx.App):
         """Handler for all events sent from Dimmer, updates UI state."""
         topic, data, info = event.Topic, event.Data, event.Info
         if "THEME FAILED" == topic:
-            ThemeImaging.Add(conf.ThemeName or conf.UnsavedLabel, data, supported=False)
-            if conf.UnsavedTheme:
-                ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, data, supported=False)
+            ThemeImaging.Add(conf.ThemeName or self.unsaved_name(), data, supported=False)
             self.frame.combo_themes.ToolTip = get_theme_str(data, supported=False)
             if not conf.ThemeName or conf.ThemeName == conf.UnsavedName:
                 self.frame.combo_editor.ToolTip = self.frame.combo_themes.ToolTip
@@ -494,8 +492,7 @@ class NightFall(wx.App):
             self.set_tray_icon(self.TRAYICONS[True][True])
             self.frame.cb_enabled.Disable()
             if not self.frame.Shown or self.frame.IsIconized():
-                n = "" if conf.UnsavedLabel == self.frame.combo_themes.Value \
-                    else conf.ThemeName
+                n = conf.ThemeName or ""
                 m = "Schedule in effect%s." % ("" if not n else ': theme "%s"' % n)
                 m = wx.adv.NotificationMessage(title=conf.Title, message=m)
                 if self.trayicon.IsAvailable(): m.UseTaskBarIcon(self.trayicon)
@@ -540,8 +537,7 @@ class NightFall(wx.App):
 
         if set(("THEME APPLIED", "THEME CHANGED")) & set((topic, info)):
             if not conf.ThemeName and conf.UnsavedTheme:
-                ThemeImaging.Add(conf.UnsavedLabel, conf.UnsavedTheme)
-                ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, conf.UnsavedTheme)
+                ThemeImaging.Add(self.unsaved_name(), conf.UnsavedTheme)
                 tooltip = get_theme_str(data, supported=False)
                 self.frame.combo_editor.ToolTip = self.frame.combo_themes.ToolTip = tooltip
             self.frame.label_error.Hide()
@@ -552,6 +548,12 @@ class NightFall(wx.App):
         self.frame_has_modal = True
         try: return func(*args, **kwargs)
         finally: self.frame_has_modal = False
+
+
+    def unsaved_name(self):
+        """Returns current unsaved name for display, as "name *" or " (unsaved) "."""
+        if conf.UnsavedName:  return conf.ModifiedTemplate % conf.UnsavedName
+        if conf.UnsavedTheme: return conf.UnsavedLabel
 
 
     def set_tray_icon(self, icon):
@@ -583,7 +585,7 @@ class NightFall(wx.App):
         """Handler for selecting an item in schedule combobox."""
         name = self.frame.combo_themes.GetItemValue(event.Selection)
         theme = conf.Themes.get(name, conf.UnsavedTheme)
-        conf.ThemeName = name if name != conf.UnsavedLabel else None
+        conf.ThemeName = name if event.Selection or not conf.UnsavedTheme else None
         self.dimmer.toggle_suspend(False)
         self.dimmer.set_theme(theme, "THEME CHANGED")
 
@@ -611,8 +613,7 @@ class NightFall(wx.App):
             for c in cmb, cmb2:
                 c.Delete(0), c.SetSelection(event.Selection - 1)
             cmb.ToolTip = get_theme_str(conf.Themes[cmb.Value])
-            ThemeImaging.Remove(conf.ModifiedTemplate % name)
-            ThemeImaging.Remove(conf.UnsavedLabel)
+            ThemeImaging.Remove(self.unsaved_name())
 
         theme = conf.Themes.get(name, conf.UnsavedTheme)
         conf.UnsavedName = name
@@ -634,13 +635,12 @@ class NightFall(wx.App):
             value = event.GetPosition() if new else s.GetValue()
             s.ToolTip = str(value)
             theme.append(value)
-        ThemeImaging.Add(conf.UnsavedLabel, theme)
-        ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, theme)
+        ThemeImaging.Add(self.unsaved_name(), theme)
 
         cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
         if not conf.UnsavedTheme:
-            cmb.Insert(conf.UnsavedLabel, 0)
-            cmb2.Insert(conf.ModifiedTemplate % conf.UnsavedName, 0)
+            cmb .Insert(self.unsaved_name(), 0)
+            cmb2.Insert(self.unsaved_name(), 0)
         conf.UnsavedTheme = theme
         cmb2.SetSelection(0)
         cmb2.ToolTip = get_theme_str(theme)
@@ -665,14 +665,13 @@ class NightFall(wx.App):
         name = dlg.GetValue().strip()
         if not name: return
 
-        ThemeImaging.Remove(conf.UnsavedLabel)
-        ThemeImaging.Remove(conf.ModifiedTemplate % name0)
+        ThemeImaging.Remove(self.unsaved_name())
         cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
         if theme == conf.Themes.get(name): # No change
             if conf.UnsavedTheme:
-                cmb_v = cmb.Value
+                idx_v = cmb.GetSelection()
                 for c in cmb, cmb2: c.Delete(0)
-                if cmb_v == conf.UnsavedLabel: cmb.SetSelection(cmb.FindItem(name))
+                if not idx_v: cmb.SetSelection(cmb.FindItem(name))
                 cmb2.SetSelection(cmb2.FindItem(name))
                 conf.UnsavedTheme = None
                 conf.save()
@@ -689,8 +688,7 @@ class NightFall(wx.App):
         if not conf.ThemeName: conf.ThemeName = name
         ThemeImaging.Add(name, theme)
         items = sorted(conf.Themes, key=lambda x: x.lower())
-        cmb_v, lst_v = (c.Value for c in (cmb, self.frame.list_themes))
-        if conf.UnsavedLabel == cmb_v: cmb_v = name
+        lst_v = self.frame.list_themes.Value
         for c in cmb, cmb2, self.frame.list_themes: c.SetItems(items)
         cmb.SetSelection(cmb.FindItem(name))
         cmb2.SetSelection(cmb2.FindItem(name))
@@ -706,11 +704,10 @@ class NightFall(wx.App):
 
         cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
         conf.UnsavedTheme = None
-        was_unsaved_selected = (cmb.Value == conf.UnsavedLabel)
+        was_unsaved_selected = not cmb.GetSelection()
         cmb.Delete(0)
         cmb2.Delete(0)
-        ThemeImaging.Remove(conf.UnsavedLabel)
-        ThemeImaging.Remove(conf.ModifiedTemplate % conf.UnsavedName)
+        ThemeImaging.Remove(self.unsaved_name())
 
         name2 = conf.UnsavedName
         if name2 not in conf.Themes and conf.Themes:
@@ -745,7 +742,7 @@ class NightFall(wx.App):
 
         conf.Themes.pop(name, None)
         ThemeImaging.Remove(name)
-        ThemeImaging.Remove(conf.ModifiedTemplate % name)
+        if name == conf.UnsavedName: ThemeImaging.Remove(self.unsaved_name())
         self.frame.list_themes.RemoveItemAt(selected)
         self.frame.list_themes.SetSelection(min(selected, len(conf.Themes)))
         self.frame.list_themes.Refresh()
@@ -787,11 +784,9 @@ class NightFall(wx.App):
         if not conf.Themes and not conf.UnsavedTheme:
             # Deleted last theme and nothing being modified: add something at least
             conf.ThemeName, conf.UnsavedName, conf.UnsavedTheme = None, "", theme
-            ThemeImaging.Add(conf.UnsavedLabel, theme)
-            ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, theme)
+            ThemeImaging.Add(self.unsaved_name(), theme)
             for c in cmb, cmb2:
-                n = conf.UnsavedLabel if c is cmb else conf.ModifiedTemplate % conf.UnsavedName
-                c.Insert(n, 0)
+                c.Insert(self.unsaved_name(), 0)
                 c.SetSelection(0)
                 c.ToolTip = get_theme_str(theme)
             self.dimmer.set_theme(theme, "THEME CHANGED")
@@ -811,7 +806,7 @@ class NightFall(wx.App):
 
         def on_apply_theme(name, theme, event):
             if not event.IsChecked(): return
-            if name == conf.UnsavedLabel: name = None
+            if name == self.unsaved_name(): name = None
             conf.ThemeName = name
             if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
             self.dimmer.toggle_suspend(False)
@@ -869,11 +864,11 @@ class NightFall(wx.App):
 
         menu_themes = wx.Menu()
         items = sorted(conf.Themes.items(), key=lambda x: x[0].lower())
-        if conf.UnsavedTheme: items.insert(0, (conf.UnsavedLabel, ) * 2)
+        if conf.UnsavedTheme: items.insert(0, (self.unsaved_name(), ) * 2)
         for name, theme in items:
             item = menu_themes.Append(-1, name.strip(), kind=wx.ITEM_CHECK)
             if is_dimming: item.Check(name == conf.ThemeName
-                                      or name == conf.UnsavedLabel
+                                      or name == self.unsaved_name()
                                          and not conf.ThemeName)
             handler = functools.partial(on_apply_theme, name, theme)
             menu.Bind(wx.EVT_MENU, handler, id=item.GetId())
@@ -1375,23 +1370,19 @@ class NightFall(wx.App):
         for name, theme in conf.Themes.items():
             ThemeImaging.Add(name, theme)
         if conf.UnsavedTheme:
-            ThemeImaging.Add(conf.UnsavedLabel, conf.UnsavedTheme)
-            ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, conf.UnsavedTheme)
+            ThemeImaging.Add(self.unsaved_name(), conf.UnsavedTheme)
         self.frame.button_restore.Shown = any(
             conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
         self.frame.button_restore.ContainingSizer.Layout()
 
         cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
         items = sorted(conf.Themes, key=lambda x: x.lower())
-        citems = ([conf.UnsavedLabel] if conf.UnsavedTheme else []) + items
-        eitems = ([conf.ModifiedTemplate % conf.UnsavedName] if conf.UnsavedTheme else []) + items
+        citems = ([self.unsaved_name()] if conf.UnsavedTheme else []) + items
         cmb.SetItems(citems)
         self.frame.list_themes.SetItems(items)
-        cmb2.SetItems(eitems)
+        cmb2.SetItems(citems)
 
-        names = filter(bool, [conf.ThemeName, conf.UnsavedLabel,
-                              conf.ModifiedTemplate % conf.UnsavedName
-                              if conf.UnsavedTheme else ""])
+        names = filter(bool, [conf.ThemeName, self.unsaved_name()])
         for ctrl in cmb, cmb2, self.frame.list_themes:
             idx = next((i for n in names for i in [ctrl.FindItem(n)] if i >= 0), -1)
             if idx >= 0: ctrl.SetSelection(idx)
