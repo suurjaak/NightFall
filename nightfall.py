@@ -748,7 +748,6 @@ class NightFall(wx.App):
         ThemeImaging.Remove(name)
         if name == conf.UnsavedName: ThemeImaging.Remove(self.unsaved_name())
         self.frame.list_themes.RemoveItemAt(selected)
-        self.frame.list_themes.SetSelection(min(selected, len(conf.Themes)))
         self.frame.list_themes.Refresh()
         self.frame.button_apply.Enabled  = bool(self.frame.list_themes.GetItemCount())
         self.frame.button_delete.Enabled = bool(self.frame.list_themes.GetItemCount())
@@ -1389,10 +1388,10 @@ class NightFall(wx.App):
         cmb2.SetItems(citems)
 
         names = filter(bool, [conf.ThemeName, self.unsaved_name()])
-        for ctrl in cmb, cmb2, self.frame.list_themes:
+        for ctrl in cmb, cmb2:
             idx = next((i for n in names for i in [ctrl.FindItem(n)] if i >= 0), -1)
-            if idx >= 0: ctrl.SetSelection(idx)
-            if idx >= 0 and isinstance(ctrl, BitmapComboBox):
+            if idx >= 0:
+                ctrl.SetSelection(idx)
                 theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
                 ctrl.ToolTip = get_theme_str(theme)
         if not conf.UnsavedTheme:
