@@ -481,11 +481,11 @@ class NightFall(wx.App):
             self.frame.label_error.Wrap(self.frame.label_error.Size[0])
         elif "MANUAL TOGGLED" == topic:
             self.frame.cb_enabled.Value = data
-            self.set_tray_icon(self.TRAYICONS[data][conf.ScheduleEnabled])
+            self.set_tray_icon(self.TRAYICONS[self.dimmer.should_dim()][conf.ScheduleEnabled])
             if data: self.frame.button_suspend.Hide()
         elif "SCHEDULE TOGGLED" == topic:
             self.frame.cb_schedule.Value = data
-            self.set_tray_icon(self.TRAYICONS[self.dimmer.should_dim()][data])
+            self.set_tray_icon(self.TRAYICONS[self.dimmer.should_dim()][conf.ScheduleEnabled])
         elif "SCHEDULE CHANGED" == topic:
             self.frame.selector_time.SetSelections(data)
         elif "SCHEDULE IN EFFECT" == topic:
