@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev24"
+Version = "2.0.dev25"
 
 VersionDate = "09.09.2020"
 
@@ -40,8 +40,9 @@ FileDirectives = [
 ]
 """List of user-modifiable attributes, saved if changed from default."""
 OptionalFileDirectives = [
-    "FadeSteps", "ModifiedTemplate", "ThemeBitmapSize", "ThemeNamedBitmapSize", 
-    "TimerInterval", "UnsavedLabel", "UnsavedName", "UnsavedTheme",
+    "FadeSteps", "ModifiedTemplate", "SuspendIntervals",
+    "ThemeBitmapSize", "ThemeNamedBitmapSize", "TimerInterval",
+    "UnsavedLabel", "UnsavedName", "UnsavedTheme",
     "WindowSlideInEnabled", "WindowSlideOutEnabled",
     "WindowSlideInStep", "WindowSlideOutStep",
     "WindowSlideDelay", "WindowTimeout",
@@ -181,18 +182,24 @@ ModifiedTemplate = "%s *"
 """String template for suspended info, with time placeholder."""
 SuspendedTemplate = "Suspended until %s"
 
+"""String template for suspended info, with time placeholder."""
+SuspendedHTMLTemplate = """
+<font face="Tahoma" size=2 color="%(graycolour)s">
+Suspended until <a href="_"><font color="%(linkcolour)s">%(time)s</font></a>
+</font>"""
+
 """Minutes to postpone schedule by on suspending."""
-SuspendInterval = 20
+SuspendIntervals = [20, 30, 40, 60, 90, 120]
 
 """Activation label for suspend-button."""
 SuspendOnLabel = "\n".join(x.center(15) for x in 
-                           ("Suspend\nfor %s minutes" % SuspendInterval).split("\n"))
+                           ("Suspend\nfor %s minutes" % SuspendIntervals[0]).split("\n"))
 
 """Deactivation label for suspend-button."""
 SuspendOffLabel = "Unsuspend"
 
 """Activation tooltip for suspend-button."""
-SuspendOnToolTip = "Delay activating schedule for %s minutes" % SuspendInterval
+SuspendOnToolTip = "Delay activating schedule for %s minutes" % SuspendIntervals[0]
 
 """Deactivation tooltip for suspend-button."""
 SuspendOffToolTip = "Apply schedule immediately"
@@ -205,7 +212,7 @@ InfoEditorText = (
 )
 
 """Information text shown on about page."""
-AboutText = """
+AboutHTMLTemplate = """
 <font face="Tahoma" size=2 color="%%(textcolour)s">
   <p>
   NightFall can change screen colour gamma and brightness settings, 

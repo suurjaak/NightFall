@@ -238,7 +238,7 @@ class Dimmer(object):
         if not changed or not self.should_dim_scheduled(): return
 
         if enabled:
-            delay = datetime.timedelta(minutes=conf.SuspendInterval)
+            delay = datetime.timedelta(minutes=conf.SuspendIntervals[0])
             start = (datetime.datetime.now() + delay).replace(second=0, microsecond=0)
             msg = "NORMAL DISPLAY"
             theme = conf.NormalTheme
@@ -404,6 +404,7 @@ class NightFall(wx.App):
         self.frame_move_ignore = False # Ignore EVT_MOVE on showing window
         self.frame_has_modal   = False # Whether a modal dialog is open
         self.dt_tray_click     = None  # Last click timestamp, for detecting double-click
+        self.suspend_interval  = None  # Currently selected suspend interval
         self.frame = frame = self.create_frame()
 
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
@@ -426,6 +427,7 @@ class NightFall(wx.App):
         frame.Bind(wx.EVT_BUTTON,     self.on_toggle_suspend,      frame.button_suspend)
         frame.Bind(wx.EVT_COMBOBOX,   self.on_select_combo_themes, frame.combo_themes)
         frame.Bind(wx.EVT_COMBOBOX,   self.on_select_combo_editor, frame.combo_editor)
+        frame.label_suspend.Bind(wx.html.EVT_HTML_LINK_CLICKED, self.on_click_suspend)
         frame.link_www.Bind(wx.html.EVT_HTML_LINK_CLICKED,
                             lambda e: webbrowser.open(e.GetLinkInfo().Href))
         frame.label_about.Bind(wx.html.EVT_HTML_LINK_CLICKED,
@@ -506,8 +508,11 @@ class NightFall(wx.App):
             if conf.ManualEnabled: wx.CallAfter(self.dimmer.toggle_manual, False)
         elif "SUSPEND TOGGLED" == topic:
             if data:
-                dt = conf.SuspendedUntil.strftime("%H:%M")
-                self.frame.label_suspend.Label    = conf.SuspendedTemplate % dt
+                args = {"graycolour": ColourManager.ColourHex(wx.SYS_COLOUR_GRAYTEXT),
+                        "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT),
+                        "time":       conf.SuspendedUntil.strftime("%H:%M")}
+                self.frame.label_suspend.SetPage(conf.SuspendedHTMLTemplate % args)
+                self.frame.label_suspend.BackgroundColour = ColourManager.GetColour(wx.SYS_COLOUR_WINDOW)
                 self.frame.button_suspend.Label   = conf.SuspendOffLabel
                 self.frame.button_suspend.ToolTip = conf.SuspendOffToolTip
                 self.frame.label_suspend.Show()
@@ -812,6 +817,17 @@ class NightFall(wx.App):
             self.dimmer.toggle_suspend(False)
             self.dimmer.set_theme(theme, "THEME APPLIED")
 
+        def on_suspend_interval(interval, event):
+            if not event.IsChecked(): return self.on_toggle_suspend()
+
+            self.suspend_interval = interval
+            conf.SuspendedUntil = dt + datetime.timedelta(minutes=interval)
+            args = {"graycolour": ColourManager.ColourHex(wx.SYS_COLOUR_GRAYTEXT),
+                    "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT),
+                    "time":       conf.SuspendedUntil.strftime("%H:%M")}
+            self.frame.label_suspend.SetPage(conf.SuspendedHTMLTemplate % args)
+            self.frame.label_suspend.BackgroundColour = ColourManager.GetColour(wx.SYS_COLOUR_WINDOW)
+
 
         is_dimming = self.dimmer.should_dim()
         is_dimming_scheduled = self.dimmer.should_dim_scheduled()
@@ -829,12 +845,23 @@ class NightFall(wx.App):
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
         if conf.ScheduleEnabled:
             if conf.SuspendedUntil:
+                menu_intervals = wx.Menu()
+                dt = conf.SuspendedUntil - datetime.timedelta(minutes=self.suspend_interval)
+                for x in conf.SuspendIntervals:
+                    label = "&%s minutes (until %s)" % \
+                            (x, (dt + datetime.timedelta(minutes=x)).strftime("%H:%M"))
+                    item = menu_intervals.Append(-1, label, kind=wx.ITEM_CHECK)
+                    item.Check(x == self.suspend_interval)
+                    handler = functools.partial(on_suspend_interval, x)
+                    menu.Bind(wx.EVT_MENU, handler, id=item.GetId())
                 label = conf.SuspendedTemplate % conf.SuspendedUntil.strftime("%H:%M")
-            else: label = conf.SuspendOnLabel.strip().replace("u", "&u", 1)
-            label = re.sub("\s+", " ", label)
-            item = menu.Append(-1, label, kind=wx.ITEM_CHECK)
-            item.Check(bool(conf.SuspendedUntil))
-            menu.Bind(wx.EVT_MENU, self.on_toggle_suspend, id=item.GetId())
+                menu.Append(-1, label.replace("u", "&u", 1), menu_intervals)
+            else:
+                label = conf.SuspendOnLabel.strip().replace("u", "&u", 1)
+                label = re.sub("\s+", " ", label)
+                item = menu.Append(-1, label, kind=wx.ITEM_CHECK)
+                item.Check(bool(conf.SuspendedUntil))
+                menu.Bind(wx.EVT_MENU, self.on_toggle_suspend, id=item.GetId())
         item = menu.Append(-1, "&Run at startup", kind=wx.ITEM_CHECK)
         item.Check(conf.StartupEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_startup, id=item.GetId())
@@ -1017,8 +1044,10 @@ class NightFall(wx.App):
         """Handler for toggling schedule suspension on/off."""
         if conf.SuspendedUntil:
             label, tooltip = conf.SuspendOnLabel, conf.SuspendOnToolTip
+            self.suspend_interval = None
         else:
             label, tooltip = conf.SuspendOffLabel, conf.SuspendOffToolTip
+            self.suspend_interval = conf.SuspendIntervals[0]
         self.frame.button_suspend.Label   = label
         self.frame.button_suspend.ToolTip = tooltip
         self.frame.button_suspend.ContainingSizer.Layout()
@@ -1069,9 +1098,37 @@ class NightFall(wx.App):
         """Handler for system colour change, refreshes About-text."""
         event.Skip()
         ThemeImaging.ClearCache()
-        args = {"textcolour": ColourManager.ColourHex(wx.SYS_COLOUR_BTNTEXT),
+        args = {"graycolour": ColourManager.ColourHex(wx.SYS_COLOUR_GRAYTEXT),
+                "textcolour": ColourManager.ColourHex(wx.SYS_COLOUR_BTNTEXT),
                 "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT)}
-        self.frame.label_about.SetPage(conf.AboutText % args)
+        if conf.SuspendedUntil:
+            args["time"] = conf.SuspendedUntil.strftime("%H:%M")
+        self.frame.label_about.SetPage(conf.AboutHTMLTemplate % args)
+        self.frame.label_suspend.SetPage(conf.SuspendedHTMLTemplate % args)
+
+
+    def on_click_suspend(self, event):
+        """Handler for clicking time link in suspend label, opens interval choice dialog."""
+        dt = conf.SuspendedUntil - datetime.timedelta(minutes=self.suspend_interval)
+        choices = ["%s minutes (until %s)" % 
+                   (x, (dt + datetime.timedelta(minutes=x)).strftime("%H:%M"))
+                   for x in conf.SuspendIntervals]
+        dlg = wx.SingleChoiceDialog(self.frame, "Suspend for:", conf.Title, choices)
+        dlg.CenterOnParent()
+        dlg.SetSelection(conf.SuspendIntervals.index(self.suspend_interval))
+        resp = self.modal(dlg.ShowModal)
+        if wx.ID_OK != resp: return
+
+        interval = conf.SuspendIntervals[dlg.GetSelection()]        
+        if interval == self.suspend_interval: return
+
+        self.suspend_interval = interval
+        conf.SuspendedUntil = dt + datetime.timedelta(minutes=interval)
+        args = {"graycolour": ColourManager.ColourHex(wx.SYS_COLOUR_GRAYTEXT),
+                "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT),
+                "time":       conf.SuspendedUntil.strftime("%H:%M")}
+        self.frame.label_suspend.SetPage(conf.SuspendedHTMLTemplate % args)
+        self.frame.label_suspend.BackgroundColour = ColourManager.GetColour(wx.SYS_COLOUR_WINDOW)
 
 
     def create_frame(self):
@@ -1140,9 +1197,11 @@ class NightFall(wx.App):
         label_error = frame.label_error = wx.StaticText(panel_config, style=wx.ALIGN_CENTER)
         ColourManager.Manage(label_error, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
 
-        label_suspend = frame.label_suspend = wx.StaticText(panel_config)
+        label_suspend = frame.label_suspend = wx.html.HtmlWindow(panel_config,
+            size=(-1, 16), style=wx.html.HW_SCROLLBAR_NEVER)
+        ColourManager.Manage(label_suspend, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
+        label_suspend.SetBorders(0)
         label_suspend.Hide()
-        ColourManager.Manage(label_suspend, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
         frame.button_suspend = wx.Button(panel_config, label=conf.SuspendOnLabel)
         frame.button_suspend.ToolTip = conf.SuspendOnToolTip
         if "\n" in conf.SuspendOnLabel: frame.button_suspend.MinSize = (-1, 35)
@@ -1155,7 +1214,7 @@ class NightFall(wx.App):
         sizer_right.Add(combo_themes, border=5, flag=wx.LEFT)
         sizer_right.Add(label_error, border=10, flag=wx.LEFT | wx.TOP | wx.BOTTOM)
         sizer_right.AddStretchSpacer()
-        sizer_right.Add(label_suspend, border=5, flag=wx.LEFT | wx.TOP)
+        sizer_right.Add(label_suspend, border=5, flag=wx.LEFT | wx.TOP | wx.GROW)
         sizer_right.Add(frame.button_suspend, border=5, flag=wx.ALL | wx.GROW)
         sizer_right.Add(frame.cb_startup, border=5, flag=wx.LEFT | wx.TOP)
         sizer_middle.Add(sizer_right, border=5, flag=wx.BOTTOM | wx.GROW)
@@ -1251,7 +1310,7 @@ class NightFall(wx.App):
         label_about = frame.label_about = wx.html.HtmlWindow(panel_about)
         args = {"textcolour": ColourManager.ColourHex(wx.SYS_COLOUR_BTNTEXT),
                 "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT)}
-        label_about.SetPage(conf.AboutText % args)
+        label_about.SetPage(conf.AboutHTMLTemplate % args)
         ColourManager.Manage(label_about, "BackgroundColour", wx.SYS_COLOUR_BTNFACE)
 
         link_www = frame.link_www = wx.adv.HyperlinkCtrl(panel_about, label="github",
