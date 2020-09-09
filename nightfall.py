@@ -874,7 +874,7 @@ class NightFall(wx.App):
                                          and not conf.ThemeName)
             handler = functools.partial(on_apply_theme, name, theme)
             menu.Bind(wx.EVT_MENU, handler, id=item.GetId())
-        menu.Append(-1, "&Apply theme", menu_themes)
+        menu.Append(-1, "Apply &theme", menu_themes)
 
         item = wx.MenuItem(menu, -1, "&Options")
         item.Enable(not self.frame.Shown)
