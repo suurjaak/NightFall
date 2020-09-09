@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    08.09.2020
+@modified    09.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev23"
+Version = "2.0.dev24"
 
-VersionDate = "08.09.2020"
+VersionDate = "09.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -41,10 +41,10 @@ FileDirectives = [
 """List of user-modifiable attributes, saved if changed from default."""
 OptionalFileDirectives = [
     "FadeSteps", "ModifiedTemplate", "ThemeBitmapSize", "ThemeNamedBitmapSize", 
-    "TimerInterval", "WindowSlideInEnabled", "WindowSlideOutEnabled",
+    "TimerInterval", "UnsavedLabel", "UnsavedName", "UnsavedTheme",
+    "WindowSlideInEnabled", "WindowSlideOutEnabled",
     "WindowSlideInStep", "WindowSlideOutStep",
     "WindowSlideDelay", "WindowTimeout",
-    "UnsavedLabel", "UnsavedName", "UnsavedTheme",
 ]
 Defaults = {}
 

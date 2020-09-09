@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    08.09.2020
+@modified    09.09.2020
 """
 import collections
 import copy
@@ -94,10 +94,11 @@ class Dimmer(object):
 
         def is_var_valid(name):
             v, v0 = getattr(conf, name), conf.Defaults[name]
-            return len(v) == len(v0) \
-                   and all(isinstance(a, type(b)) for a, b in zip(v, v0)) \
+            return (len(v) == len(v0)
+                    and all(isinstance(a, type(b)) for a, b in zip(v, v0))) \
                    if isinstance(v, (list, tuple)) and isinstance(v0, (list, tuple)) \
-                   else isinstance(v, type(v0))
+                   else (isinstance(v, type(v0))
+                         or isinstance(v, basestring) and isinstance(v0, basestring))
 
         if not is_theme_valid(conf.UnsavedTheme):
             conf.UnsavedTheme = None
@@ -245,7 +246,7 @@ class Dimmer(object):
             start, msg = None, "SCHEDULE IN EFFECT"
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
         conf.SuspendedUntil = start
-        self.post_event("SUSPEND TOGGLED", enabled)
+        self.post_event("SUSPEND TOGGLED", enabled, start)
         self.apply_theme(theme, msg, fade=True)
 
 
@@ -533,9 +534,11 @@ class NightFall(wx.App):
             self.frame.button_suspend.Hide()
 
         if set(("THEME APPLIED", "THEME CHANGED")) & set((topic, info)):
-            if not conf.ThemeName:
-                ThemeImaging.Add(conf.UnsavedLabel, data)
-                ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, data)
+            if not conf.ThemeName and conf.UnsavedTheme:
+                ThemeImaging.Add(conf.UnsavedLabel, conf.UnsavedTheme)
+                ThemeImaging.Add(conf.ModifiedTemplate % conf.UnsavedName, conf.UnsavedTheme)
+                tooltip = get_theme_str(data, supported=False)
+                self.frame.combo_editor.ToolTip = self.frame.combo_themes.ToolTip = tooltip
             self.frame.label_error.Hide()
 
 
@@ -576,6 +579,7 @@ class NightFall(wx.App):
         name = self.frame.combo_themes.GetItemValue(event.Selection)
         theme = conf.Themes.get(name, conf.UnsavedTheme)
         conf.ThemeName = name if name != conf.UnsavedLabel else None
+        self.dimmer.toggle_suspend(False)
         self.dimmer.set_theme(theme, "THEME CHANGED")
 
 
@@ -801,9 +805,11 @@ class NightFall(wx.App):
         menu = wx.Menu()
 
         def on_apply_theme(name, theme, event):
+            if not event.IsChecked(): return
             if name == conf.UnsavedLabel: name = None
             conf.ThemeName = name
             if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
+            self.dimmer.toggle_suspend(False)
             self.dimmer.set_theme(theme, "THEME APPLIED")
 
 
@@ -836,10 +842,9 @@ class NightFall(wx.App):
 
         menu_themes = wx.Menu()
         items = sorted(conf.Themes.items(), key=lambda x: x[0].lower())
-        if conf.UnsavedTheme:
-            items.insert(0, (conf.UnsavedLabel.strip(), conf.UnsavedTheme))
+        if conf.UnsavedTheme: items.insert(0, (conf.UnsavedLabel, ) * 2)
         for name, theme in items:
-            item = menu_themes.Append(-1, name, kind=wx.ITEM_CHECK)
+            item = menu_themes.Append(-1, name.strip(), kind=wx.ITEM_CHECK)
             if is_dimming: item.Check(name == conf.ThemeName
                                       or name == conf.UnsavedLabel
                                          and not conf.ThemeName)
@@ -1130,7 +1135,7 @@ class NightFall(wx.App):
         combo_themes = BitmapComboBox(panel_config, bitmapsize=conf.ThemeNamedBitmapSize,
                                      imagehandler=ThemeImaging)
         frame.combo_themes = combo_themes
-        combo_themes.SetPopupMaxHeight(200)
+        combo_themes.SetPopupMaxHeight(250)
 
         label_error = frame.label_error = wx.StaticText(panel_config, style=wx.ALIGN_CENTER)
         ColourManager.Manage(label_error, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
