@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    09.09.2020
+@modified    10.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev30"
+Version = "2.0.dev31"
 
-VersionDate = "09.09.2020"
+VersionDate = "10.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -206,9 +206,11 @@ SuspendOffToolTip = "Apply theme immediately"
 
 """Information text shown on theme editor page."""
 InfoEditorText = (
-    "Fine-tune the components that make up the display: brightness \n"
-    "(ranges from dark to superbright) and red-green-blue colour channels.\n\n"
-    "A lot of the darker ranges will not be accepted by the graphics hardware."
+    "Fine-tune individual display components: brightness "
+    "(ranges from dark to superbright) and red-green-blue colour channels.\n"
+    "Normal mode is 100% brightness with colours at maximum.\n\n"
+    "A lot of the darker ranges will not be accepted by the graphics hardware. "
+    "This is system-specific, and is to be expected."
 )
 
 """Information text shown on about page."""

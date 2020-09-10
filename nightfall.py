@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    09.09.2020
+@modified    10.09.2020
 """
 import collections
 import copy
@@ -151,7 +151,10 @@ class Dimmer(object):
 
 
     def stop(self):
-        """Stops any current dimming."""
+        """Stops timers and any current dimming."""
+        self.timer.Stop()
+        if self.fade_timer: self.fade_timer.Stop()
+        self.fade_timer = None
         self.apply_theme(conf.NormalTheme)
 
 
@@ -196,6 +199,8 @@ class Dimmer(object):
         self.apply_theme(theme, fade=True)
         if changed: conf.save()
         self.post_event(msg, conf.ManualEnabled)
+        if changed and conf.ManualEnabled:
+            self.post_event("MANUAL IN EFFECT", theme)
 
 
     def toggle_schedule(self, enabled):
@@ -263,7 +268,10 @@ class Dimmer(object):
             self.fade_target_theme = self.fade_info = None
             self.fade_delta = self.fade_steps = self.fade_timer = None
             self.fade_current_theme = self.fade_original_theme = None
-        if conf.FadeSteps > 0 and (fade or (info and "THEME MODIFIED" != info)):
+
+        if False == ThemeImaging.IsSupported(self.current_theme):
+            fade = False
+        if conf.FadeSteps > 0 and fade and theme != self.current_theme:
             self.fade_info = info
             self.fade_steps = conf.FadeSteps
             self.fade_target_theme = theme[:]
@@ -273,11 +281,10 @@ class Dimmer(object):
             for new, now in zip(theme, self.current_theme):
                 self.fade_delta.append(float(new - now) / conf.FadeSteps)
             self.fade_timer = wx.CallLater(conf.FadeDelay, self.on_fade_step)
-        elif gamma.set_screen_gamma(theme):
-            self.current_theme = theme[:]
         else:
-            self.post_event("THEME FAILED", theme, info)
-            result = False
+            result = gamma.set_screen_gamma(theme)
+            self.current_theme = theme[:]
+            if not result: self.post_event("THEME FAILED", theme, info)
         return result
 
 
@@ -309,22 +316,20 @@ class Dimmer(object):
         self.post_event(msg, theme)
 
 
-    def set_theme(self, theme, info=None):
+    def set_theme(self, theme, info=None, fade=False):
         """
         Sets the screen dimming theme, and applies it if enabled.
 
         @param   theme  a 4-byte list, for 3 RGB channels and brightness, 0..255
         @param   info   info given to callback event, if any
-        @return         False on failure, True otherwise
+        @param   fade   if True, changes theme from current to new smoothly,
+                        in a number of steps
         """
-        result = True
         changed = (theme != self.current_theme)
         if changed:
             self.post_event("THEME CHANGED", theme, info)
-            if self.should_dim():
-                result = self.apply_theme(theme, info)
+            if self.should_dim(): self.apply_theme(theme, info, fade=fade)
         conf.save()
-        return result
 
 
     def should_dim(self):
@@ -373,8 +378,8 @@ class Dimmer(object):
             self.post_event("THEME APPLIED", self.fade_target_theme)
         else:
             # Unsupported theme: jump back to normal on last step.
-            self.apply_theme(conf.NormalTheme, fade=False)
-            self.post_event("THEME APPLIED", conf.NormalTheme)
+            self.apply_theme(conf.NormalTheme)
+            self.current_theme = current_theme[:]
         if self.fade_steps:
             self.fade_timer = wx.CallLater(conf.FadeDelay, self.on_fade_step)
         else:
@@ -469,8 +474,9 @@ class NightFall(wx.App):
         """Handler for all events sent from Dimmer, updates UI state."""
         topic, data, info = event.Topic, event.Data, event.Info
         if "THEME FAILED" == topic:
-            ThemeImaging.Add(conf.ThemeName or self.unsaved_name(), data, supported=False)
-            self.frame.combo_themes.ToolTip = get_theme_str(data, supported=False)
+            theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
+            ThemeImaging.Add(conf.ThemeName or self.unsaved_name(), theme, supported=False)
+            self.frame.combo_themes.ToolTip = get_theme_str(theme, supported=False)
             if not conf.ThemeName or conf.ThemeName == conf.UnsavedName:
                 self.frame.combo_editor.ToolTip = self.frame.combo_themes.ToolTip
 
@@ -480,64 +486,46 @@ class NightFall(wx.App):
             self.frame.label_error.Wrap(self.frame.label_error.Size[0])
         elif "MANUAL TOGGLED" == topic:
             self.frame.cb_manual.Value = data
-            self.set_tray_icon(self.TRAYICONS[self.dimmer.should_dim()][conf.ScheduleEnabled])
+            dimming = not conf.SuspendedUntil and self.dimmer.should_dim()
+            self.set_tray_icon(self.TRAYICONS[dimming][conf.ScheduleEnabled])
+            self.update_suspend()
         elif "SCHEDULE TOGGLED" == topic:
             self.frame.cb_schedule.Value = data
-            self.set_tray_icon(self.TRAYICONS[self.dimmer.should_dim()][conf.ScheduleEnabled])
+            dimming = not conf.SuspendedUntil and self.dimmer.should_dim()
+            self.set_tray_icon(self.TRAYICONS[dimming][conf.ScheduleEnabled])
         elif "SCHEDULE CHANGED" == topic:
             self.frame.selector_time.SetSelections(data)
         elif "SCHEDULE IN EFFECT" == topic:
-            self.set_tray_icon(self.TRAYICONS[True][True])
+            dimming = not conf.SuspendedUntil
+            self.set_tray_icon(self.TRAYICONS[dimming][True])
             if not self.frame.Shown or self.frame.IsIconized():
                 n = conf.ThemeName or ""
                 m = "Schedule in effect%s." % ("" if not n else ': theme "%s"' % n)
                 m = wx.adv.NotificationMessage(title=conf.Title, message=m)
                 if self.trayicon.IsAvailable(): m.UseTaskBarIcon(self.trayicon)
                 m.Show()
-            self.frame.button_suspend.Label   = conf.SuspendOnLabel
-            self.frame.button_suspend.ToolTip = conf.SuspendOnToolTip
-            self.frame.button_suspend.Show()
-            self.frame.button_suspend.ContainingSizer.Layout()
+            self.update_suspend()
         elif "SUSPEND TOGGLED" == topic:
-            if data:
-                args = {"graycolour": ColourManager.ColourHex(wx.SYS_COLOUR_GRAYTEXT),
-                        "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT),
-                        "time":       conf.SuspendedUntil.strftime("%H:%M")}
-                self.frame.label_suspend.SetPage(conf.SuspendedHTMLTemplate % args)
-                self.frame.label_suspend.BackgroundColour = ColourManager.GetColour(wx.SYS_COLOUR_WINDOW)
-                self.frame.button_suspend.Label   = conf.SuspendOffLabel
-                self.frame.button_suspend.ToolTip = conf.SuspendOffToolTip
-                self.frame.label_suspend.Show()
-                self.frame.button_suspend.Show()
-            elif self.dimmer.should_dim():
-                self.frame.button_suspend.Label   = conf.SuspendOnLabel
-                self.frame.button_suspend.ToolTip = conf.SuspendOnToolTip
-                self.frame.label_suspend.Hide()
-                self.frame.button_suspend.Show()
-            else:
-                self.frame.label_suspend.Hide()
-                self.frame.button_suspend.Hide()
-            self.frame.button_suspend.ContainingSizer.Layout()
+            dimming = not conf.SuspendedUntil and self.dimmer.should_dim()
+            self.set_tray_icon(self.TRAYICONS[dimming][conf.ScheduleEnabled])
+            self.update_suspend()
         elif "STARTUP TOGGLED" == topic:
             self.frame.cb_startup.Value = data
         elif "STARTUP POSSIBLE" == topic:
-            self.frame.cb_startup.Show(data)
+            self.frame.panel_startup.Show(data)
+            self.frame.panel_startup.ContainingSizer.Layout()
         elif "MANUAL IN EFFECT" == topic:
-            self.set_tray_icon(self.TRAYICONS[True][conf.ScheduleEnabled])
-            self.frame.button_suspend.Label   = conf.SuspendOnLabel
-            self.frame.button_suspend.ToolTip = conf.SuspendOnToolTip
-            self.frame.button_suspend.Show()
-            self.frame.button_suspend.ContainingSizer.Layout()
+            dimming = not conf.SuspendedUntil
+            self.set_tray_icon(self.TRAYICONS[dimming][conf.ScheduleEnabled])
+            self.update_suspend()
         elif "NORMAL DISPLAY" == topic:
             self.set_tray_icon(self.TRAYICONS[False][conf.ScheduleEnabled])
-            if not conf.SuspendedUntil:
-                self.frame.label_suspend.Hide()
-                self.frame.button_suspend.Hide()
+            self.update_suspend()
 
         if set(("THEME APPLIED", "THEME CHANGED")) & set((topic, info)):
-            if not conf.ThemeName and conf.UnsavedTheme:
-                ThemeImaging.Add(self.unsaved_name(), conf.UnsavedTheme)
-                tooltip = get_theme_str(data, supported=False)
+            if not conf.ThemeName and conf.UnsavedTheme and data == conf.UnsavedTheme:
+                ThemeImaging.Add(self.unsaved_name(), data)
+                tooltip = get_theme_str(data)
                 self.frame.combo_editor.ToolTip = self.frame.combo_themes.ToolTip = tooltip
             self.frame.label_error.Hide()
 
@@ -555,6 +543,30 @@ class NightFall(wx.App):
         if conf.UnsavedTheme: return conf.UnsavedLabel
 
 
+    def update_suspend(self):
+        """Updates suspend state in UI."""
+        self.panel_config.Freeze()
+        label, button = self.frame.label_suspend, self.frame.button_suspend
+        try:
+            if conf.SuspendedUntil:
+                args = {"graycolour": ColourManager.ColourHex(wx.SYS_COLOUR_GRAYTEXT),
+                        "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT),
+                        "time":       conf.SuspendedUntil.strftime("%H:%M")}
+                label.SetPage(conf.SuspendedHTMLTemplate % args)
+                label.BackgroundColour = ColourManager.GetColour(wx.SYS_COLOUR_WINDOW)
+                button.Label   = conf.SuspendOffLabel
+                button.ToolTip = conf.SuspendOffToolTip
+                label.Show(); button.Show()
+            elif self.dimmer.should_dim():
+                button.Label   = conf.SuspendOnLabel
+                button.ToolTip = conf.SuspendOnToolTip
+                label.Hide(); button.Show()
+            else:
+                label.Hide(); button.Hide()
+            button.ContainingSizer.Layout()
+        finally: self.panel_config.Thaw()
+
+
     def set_tray_icon(self, icon):
         """Sets the icon into tray and sets a configured tooltip."""
         self.trayicon.SetIcon(icon, conf.TrayTooltip)
@@ -564,21 +576,22 @@ class NightFall(wx.App):
         """Handler for selecting a theme in list, toggles buttons enabled."""
         event.Skip()
         selected = self.frame.list_themes.GetSelection()
-        self.frame.button_apply.Enabled  = (selected >= 0)
-        self.frame.button_delete.Enabled = (selected >= 0)
+        enabled = (0 <= selected < self.frame.list_themes.GetItemCount())
+        self.frame.button_apply.Enabled  = enabled
+        self.frame.button_delete.Enabled = enabled
 
 
     def on_apply_list_themes(self, event=None):
         """Applies the colour theme selected in list."""
         selected = self.frame.list_themes.GetSelection()
-        if selected < 0: return
+        if not (0 <= selected < self.frame.list_themes.GetItemCount()): return
 
         name = self.frame.list_themes.GetItemValue(selected)
         conf.ThemeName = name
         self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name))
         if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
         self.dimmer.toggle_suspend(False)
-        self.dimmer.set_theme(conf.Themes[name], "THEME APPLIED")
+        self.dimmer.set_theme(conf.Themes[name], "THEME APPLIED", fade=True)
 
 
     def on_select_combo_themes(self, event):
@@ -587,7 +600,7 @@ class NightFall(wx.App):
         theme = conf.Themes.get(name, conf.UnsavedTheme)
         conf.ThemeName = name if event.Selection or not conf.UnsavedTheme else None
         self.dimmer.toggle_suspend(False)
-        self.dimmer.set_theme(theme, "THEME CHANGED")
+        self.dimmer.set_theme(theme, "THEME CHANGED", fade=True)
 
 
     def on_select_combo_editor(self, event):
@@ -624,7 +637,7 @@ class NightFall(wx.App):
             conf.ThemeName = name
             cmb.SetSelection(cmb.FindItem(name))
             self.dimmer.toggle_suspend(False)
-            self.dimmer.set_theme(theme, "THEME CHANGED")
+            self.dimmer.set_theme(theme, "THEME CHANGED", fade=True)
 
 
     def on_change_theme_slider(self, event):
@@ -635,6 +648,8 @@ class NightFall(wx.App):
             value = event.GetPosition() if new else s.GetValue()
             s.ToolTip = str(value)
             theme.append(value)
+        if theme == conf.UnsavedTheme: return
+
         ThemeImaging.Add(self.unsaved_name(), theme)
 
         cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
@@ -665,7 +680,6 @@ class NightFall(wx.App):
         name = dlg.GetValue().strip()
         if not name: return
 
-        ThemeImaging.Remove(self.unsaved_name())
         cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
         if theme == conf.Themes.get(name): # No change
             if conf.UnsavedTheme:
@@ -673,6 +687,7 @@ class NightFall(wx.App):
                 for c in cmb, cmb2: c.Delete(0)
                 if not idx_v: cmb.SetSelection(cmb.FindItem(name))
                 cmb2.SetSelection(cmb2.FindItem(name))
+                ThemeImaging.Remove(self.unsaved_name())
                 conf.UnsavedTheme = None
                 conf.save()
             return
@@ -697,6 +712,7 @@ class NightFall(wx.App):
         self.frame.button_restore.Shown = any(
             conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
         self.frame.button_restore.ContainingSizer.Layout()
+        ThemeImaging.Remove(self.unsaved_name())
 
 
     def on_reset_theme(self, event=None):
@@ -715,6 +731,7 @@ class NightFall(wx.App):
             name2 = sorted(conf.Themes, key=lambda x: x.lower())[0]
         if name2 in conf.Themes:
             theme2 = conf.Themes[name2]
+            if not conf.ThemeName: conf.ThemeName = name2
         else:
             name2, theme2 = "", conf.Defaults["Themes"][conf.Defaults["ThemeName"]]
 
@@ -727,28 +744,32 @@ class NightFall(wx.App):
             cmb.SetSelection(cmb.FindItem(name2))
             cmb.ToolTip = cmb2.ToolTip
             if self.dimmer.should_dim():
+                self.dimmer.toggle_suspend(False)
                 self.dimmer.apply_theme(theme2, fade=True)
 
 
     def on_delete_theme(self, event=None):
         """Deletes the stored theme on confirm."""
-        selected = self.frame.list_themes.GetSelection()
-        if selected < 0: return
+        lst = self.frame.list_themes
+        selected = lst.GetSelection()
+        if not (0 <= selected < lst.GetItemCount()): return
 
-        name = self.frame.list_themes.GetItemValue(selected)
+        name = lst.GetItemValue(selected)
         theme = conf.Themes[name]
         resp = self.modal(wx.MessageBox, 'Delete theme "%s"?' % name,
                           conf.Title, wx.OK | wx.CANCEL | wx.ICON_WARNING)
-        self.frame.list_themes.SetFocus()
+        lst.SetFocus()
         if wx.OK != resp: return
 
         conf.Themes.pop(name, None)
         ThemeImaging.Remove(name)
         if name == conf.UnsavedName: ThemeImaging.Remove(self.unsaved_name())
-        self.frame.list_themes.RemoveItemAt(selected)
-        self.frame.list_themes.Refresh()
-        self.frame.button_apply.Enabled  = bool(self.frame.list_themes.GetItemCount())
-        self.frame.button_delete.Enabled = bool(self.frame.list_themes.GetItemCount())
+        lst.RemoveItemAt(selected)
+        lst.SetSelection(max(0, min(selected, lst.GetItemCount() - 1)))
+        lst.Refresh()
+        enabled = (0 <= lst.GetSelection() < lst.GetItemCount())
+        self.frame.button_apply.Enabled  = enabled
+        self.frame.button_delete.Enabled = enabled
         self.frame.button_restore.Shown = any(
             conf.Themes.get(k) != v for k, v in conf.Defaults["Themes"].items())
         self.frame.button_restore.ContainingSizer.Layout()
@@ -775,7 +796,7 @@ class NightFall(wx.App):
                 name2, theme2 = c.Value, conf.Themes[c.Value]
                 if c is cmb:
                     conf.ThemeName = name2
-                    self.dimmer.set_theme(theme2, "THEME CHANGED")
+                    self.dimmer.set_theme(theme2, "THEME CHANGED", fade=True)
                 else:
                     conf.UnsavedName = name2
                     if was_unsaved: conf.UnsavedTheme = None
@@ -791,7 +812,7 @@ class NightFall(wx.App):
                 c.Insert(self.unsaved_name(), 0)
                 c.SetSelection(0)
                 c.ToolTip = get_theme_str(theme)
-            self.dimmer.set_theme(theme, "THEME CHANGED")
+            self.dimmer.set_theme(theme, "THEME CHANGED", fade=True)
         conf.save()
 
 
@@ -814,7 +835,7 @@ class NightFall(wx.App):
             self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name))
             if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
             self.dimmer.toggle_suspend(False)
-            self.dimmer.set_theme(theme, "THEME APPLIED")
+            self.dimmer.set_theme(theme, "THEME APPLIED", fade=True)
 
         def on_suspend_interval(interval, event):
             if not event.IsChecked(): return self.on_toggle_suspend()
@@ -962,10 +983,13 @@ class NightFall(wx.App):
     def on_exit(self, event=None):
         """Handler for exiting the program, stops the dimmer and cleans up."""
         self.dimmer.stop()
+        self.frame.selector_time.timer.Stop()
         self.trayicon.RemoveIcon()
         self.trayicon.Destroy()
         self.frame.Destroy()
         wx.CallAfter(sys.exit) # Immediate exit fails if exiting from tray
+        try: sys.exit()
+        except Exception: pass
 
 
     def on_toggle_console(self, event):
@@ -1140,7 +1164,7 @@ class NightFall(wx.App):
         sizer_checkboxes = wx.BoxSizer(wx.HORIZONTAL)
 
         cb_manual = frame.cb_manual = wx.CheckBox(panel, label="Apply now")
-        cb_manual.ToolTip = "Apply dimming settings now"
+        cb_manual.ToolTip = "Apply colour theme regardless of schedule"
         cb_schedule = frame.cb_schedule = wx.CheckBox(panel, label="Apply on schedule")
         cb_schedule.ToolTip = "Apply automatically during the highlighted hours"
         sizer_checkboxes.Add(cb_schedule)
@@ -1163,27 +1187,28 @@ class NightFall(wx.App):
         ColourManager.Manage(notebook, "NonActiveTabTextColour", wx.SYS_COLOUR_GRAYTEXT)
         sizer.Add(notebook, proportion=1, border=5, flag=wx.GROW | wx.LEFT | wx.RIGHT)
 
-        panel_config = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
+        panel_config = self.panel_config = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
         panel_config.Sizer = wx.BoxSizer(wx.VERTICAL)
         ColourManager.Manage(panel_config, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         notebook.AddPage(panel_config, "Schedule ")
-        panel_themes = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
+        panel_themes = self.panel_themes = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
         panel_themes.Sizer = wx.BoxSizer(wx.VERTICAL)
         ColourManager.Manage(panel_themes, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         notebook.AddPage(panel_themes, "Saved themes ")
-        panel_editor = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
+        panel_editor = self.panel_editor = wx.Panel(notebook, style=wx.BORDER_SUNKEN)
         panel_editor.Sizer = wx.BoxSizer(wx.VERTICAL)
         ColourManager.Manage(panel_editor, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         notebook.AddPage(panel_editor, "Theme editor ")
-        panel_about = wx.Panel(notebook, style=wx.BORDER_NONE)
+        panel_about = self.panel_about = wx.Panel(notebook, style=wx.BORDER_NONE)
         panel_about.Sizer = wx.BoxSizer(wx.VERTICAL)
         notebook.AddPage(panel_about, "About ")
 
         # Create config page, with time selector and scheduling checkboxes
         panel_middle = wx.Panel(panel_config)
         ColourManager.Manage(panel_middle, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
-        sizer_middle = wx.BoxSizer(wx.HORIZONTAL)
-        sizer_right = wx.BoxSizer(wx.VERTICAL)
+        sizer_middle  = wx.BoxSizer(wx.HORIZONTAL)
+        sizer_right   = wx.BoxSizer(wx.VERTICAL)
+        sizer_combo   = wx.BoxSizer(wx.VERTICAL)
         selector_time = frame.selector_time = ClockSelector(panel_config)
         frame.label_combo = wx.StaticText(panel_config, label="Colour theme:")
 
@@ -1203,19 +1228,26 @@ class NightFall(wx.App):
         label_suspend.Hide()
         frame.button_suspend = wx.Button(panel_config, label=conf.SuspendOnLabel)
         frame.button_suspend.ToolTip = conf.SuspendOnToolTip
-        if "\n" in conf.SuspendOnLabel: frame.button_suspend.MinSize = (-1, 35)
+        if "\n" in conf.SuspendOnLabel:
+            sz = (-1,  frame.button_suspend.CharHeight * 2 + 9) if "nt" == os.name else \
+                 (140, frame.button_suspend.BestSize[1])
+            frame.button_suspend.Size = frame.button_suspend.MinSize = sz
         frame.button_suspend.Hide()
-        frame.cb_startup = wx.CheckBox(panel_config, label="Run at startup       ")
+        panel_startup = frame.panel_startup = wx.Panel(panel_config)
+        frame.cb_startup = wx.CheckBox(panel_startup, label="Run at startup       ")
         frame.cb_startup.ToolTip = "Add %s to startup programs" % conf.Title
 
         sizer_middle.Add(selector_time, proportion=1, border=5, flag=wx.GROW | wx.ALL)
-        sizer_right.Add(frame.label_combo, border=5, flag=wx.LEFT)
-        sizer_right.Add(combo_themes, border=5, flag=wx.LEFT)
+        sizer_combo.Add(frame.label_combo)
+        sizer_combo.Add(combo_themes)
+        sizer_right.Add(sizer_combo, border=5,  flag=wx.LEFT | wx.ALIGN_RIGHT)
         sizer_right.Add(label_error, border=10, flag=wx.LEFT | wx.TOP | wx.BOTTOM)
         sizer_right.AddStretchSpacer()
         sizer_right.Add(label_suspend, border=5, flag=wx.LEFT | wx.TOP | wx.GROW)
-        sizer_right.Add(frame.button_suspend, border=5, flag=wx.ALL | wx.GROW)
-        sizer_right.Add(frame.cb_startup, border=5, flag=wx.LEFT | wx.TOP)
+        sizer_right.Add(frame.button_suspend, border=5, flag=wx.ALL ^ wx.BOTTOM | wx.GROW)
+        panel_startup.Sizer = wx.BoxSizer(wx.VERTICAL)
+        panel_startup.Sizer.Add(frame.cb_startup, border=5, flag=wx.LEFT)
+        sizer_right.Add(panel_startup, border=5, flag=wx.TOP)
         sizer_middle.Add(sizer_right, border=5, flag=wx.BOTTOM | wx.GROW)
         panel_config.Sizer.Add(sizer_middle, proportion=1, border=5, flag=wx.GROW | wx.ALL)
 
@@ -1233,6 +1265,7 @@ class NightFall(wx.App):
         frame.button_restore = wx.Button(panel_saved_buttons, label="Restore defaults")
         frame.button_delete  = wx.Button(panel_saved_buttons, label="Remove theme")
         frame.button_restore.ToolTip = "Restore original themes"
+        frame.button_apply.Enabled = frame.button_delete.Enabled = False
 
         panel_themes.Sizer.Add(list_themes, border=5, proportion=1, flag=wx.TOP | wx.GROW)
         panel_themes.Sizer.Add(panel_saved_buttons, border=5,
@@ -1247,6 +1280,8 @@ class NightFall(wx.App):
         # Create theme editor page, with RGB sliders and color sample panel
         text_detail = wx.StaticText(panel_editor,
             style=wx.ALIGN_CENTER, label=conf.InfoEditorText)
+        dfont = text_detail.Font; dfont.SetPointSize(8 + bool("nt" != os.name))
+        text_detail.Font = dfont
         ColourManager.Manage(text_detail, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
 
         sizer_bar = wx.BoxSizer(wx.HORIZONTAL)
@@ -1285,15 +1320,12 @@ class NightFall(wx.App):
         sizer_tbuttons = wx.BoxSizer(wx.HORIZONTAL)
         button_save  = frame.button_save  = wx.Button(panel_editor, label=" Save..")
         button_reset = frame.button_reset = wx.Button(panel_editor, label="Reset")
-        bfont = button_save.Font
-        bfont.SetPointSize(bfont.PointSize - 1)
-        button_reset.Font = bfont
-        button_reset.MinSize = combo_editor.Size[0] / 2 - 3, 20
+        button_reset.MinSize = combo_editor.Size[0] / 2 - 3, -1
         button_save.MinSize  = combo_editor.Size[0] / 2 - 2, -1
         button_save.ToolTip  = "Save settings as a named theme"
         button_reset.ToolTip = "Restore original settings"
 
-        panel_editor.Sizer.Add(text_detail, border=5,
+        panel_editor.Sizer.Add(text_detail, proportion=10, border=5,
             flag=wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
         panel_editor.Sizer.AddStretchSpacer()
         sizer_right.Add(combo_editor,   border=5, flag=wx.TOP)
@@ -1330,11 +1362,11 @@ class NightFall(wx.App):
         panel_about.Sizer.Add(sizer_footer, border=5, flag=wx.LEFT | wx.GROW)
 
         sizer_buttons = wx.BoxSizer(wx.HORIZONTAL)
-        frame.button_ok = wx.lib.agw.gradientbutton.GradientButton(
+        button_ok = frame.button_ok = wx.lib.agw.gradientbutton.GradientButton(
             panel, label="Minimize", size=(100, -1))
-        frame.button_exit = wx.lib.agw.gradientbutton.GradientButton(
+        button_exit = frame.button_exit = wx.lib.agw.gradientbutton.GradientButton(
             panel, label="Exit program", size=(100, -1))
-        for b in (frame.button_ok, frame.button_exit):
+        for b in (button_ok, button_exit):
             b.Font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).Bold()
             b.SetTopStartColour(wx.Colour(96, 96, 96))
             b.SetTopEndColour(wx.Colour(112, 112, 112))
@@ -1342,12 +1374,14 @@ class NightFall(wx.App):
             b.SetBottomEndColour(wx.Colour(160, 160, 160))
             b.SetPressedTopColour(wx.Colour(160, 160, 160))
             b.SetPressedBottomColour(wx.Colour(160, 160, 160))
-        frame.button_ok.ToolTip = "Minimize window%s [Escape]" % \
+        if button_exit.CharWidth * len("Exit program") > button_exit.MinSize[0]:
+            button_exit.MinSize = 120, -1
+        button_ok.ToolTip = "Minimize window%s [Escape]" % \
             (" to tray" if wx.adv.TaskBarIcon.IsAvailable() else "")
 
-        sizer_buttons.Add(frame.button_ok, border=5, flag=wx.TOP)
+        sizer_buttons.Add(button_ok, border=5, flag=wx.TOP)
         sizer_buttons.AddStretchSpacer()
-        sizer_buttons.Add(frame.button_exit, border=5, flag=wx.TOP)
+        sizer_buttons.Add(button_exit, border=5, flag=wx.TOP)
         sizer.Add(sizer_buttons, border=5, flag=wx.GROW | wx.ALL)
 
         frame.Layout()
@@ -1380,10 +1414,11 @@ class NightFall(wx.App):
         self.frame.button_restore.ContainingSizer.Layout()
 
         cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
+        lst = self.frame.list_themes
         items = sorted(conf.Themes, key=lambda x: x.lower())
         citems = ([self.unsaved_name()] if conf.UnsavedTheme else []) + items
         cmb.SetItems(citems)
-        self.frame.list_themes.SetItems(items)
+        lst.SetItems(items)
         cmb2.SetItems(citems)
 
         names = filter(bool, [conf.ThemeName, self.unsaved_name()])
@@ -1393,15 +1428,16 @@ class NightFall(wx.App):
                 ctrl.SetSelection(idx)
                 theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
                 ctrl.ToolTip = get_theme_str(theme)
+        if conf.ThemeName:
+            lst.SetSelection(lst.FindItem(conf.ThemeName))
+            enabled = (0 <= lst.GetSelection() < lst.GetItemCount())
+            self.frame.button_apply.Enabled  = enabled
+            self.frame.button_delete.Enabled = enabled
         if not conf.UnsavedTheme:
             conf.UnsavedName = cmb2.GetItemValue(cmb2.GetSelection())
 
         theme = conf.Themes.get(cmb.Value, conf.UnsavedTheme)
         for s, v in zip(self.frame.sliders, theme): s.Value, s.ToolTip = v, str(v)
-
-        self.frame.button_apply.Enabled  = (idx >= 0)
-        self.frame.button_delete.Enabled = (idx >= 0)
-
 
 
 
@@ -1419,6 +1455,8 @@ class ClockSelector(wx.Panel):
     COLOUR_TEXT   = wx.BLACK
     COLOUR_LINES  = wx.BLACK
     COLOUR_TIME   = wx.RED
+    FONT_SIZE     = 8
+    INTERVAL      = 30
     RADIUS_CENTER = 20
     ANGLE_START   = math.pi / 2 # In polar coordinates
 
@@ -1453,6 +1491,8 @@ class ClockSelector(wx.Panel):
         self.SetInitialSize(self.GetMinSize())
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         self.AcceptsFocus = self.AcceptsFocusFromKeyboard = lambda: False
+        font = self.Font; font.SetPointSize(self.FONT_SIZE); self.Font = font
+
         self.Bind(wx.EVT_SIZE,  self.OnSize)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
@@ -1460,7 +1500,7 @@ class ClockSelector(wx.Panel):
         self.Bind(wx.EVT_SYS_COLOUR_CHANGED, self.OnSysColourChange)
         self.timer = wx.Timer()
         self.timer.Bind(wx.EVT_TIMER, self.on_timer, self.timer)
-        self.timer.Start(milliseconds=1000 * 30) # Fire timer every 30 seconds
+        self.timer.Start(milliseconds=1000 * self.INTERVAL)
 
 
     def on_timer(self, event):
@@ -1570,7 +1610,7 @@ class ClockSelector(wx.Panel):
         # Connect overflow
         self.sectors.append([last_line[0], last_line[1], self.sectors[0][2], self.sectors[0][3]  ])
         self.notch_pts = notch_pts
-        if self.USE_GC: wx.CallAfter(self.InitBuffer)
+        if self.USE_GC: self.InitBuffer()
 
 
     def SetSelections(self, selections):
@@ -1592,7 +1632,7 @@ class ClockSelector(wx.Panel):
 
     def OnPaint(self, event):
         """Handler for paint event, uses double buffering to reduce flicker."""
-        if self.USE_GC: dc = wx.BufferedPaintDC(self, self.buffer)
+        if self.USE_GC: wx.BufferedPaintDC(self, self.buffer)
         else: self.DrawDC(wx.BufferedPaintDC(self))
 
 
@@ -1693,19 +1733,19 @@ class ClockSelector(wx.Panel):
         width, height = self.Size
         if not width or not height: return
 
-        dc.BackgroundColour = self.Parent.BackgroundColour
+        dc.Background = wx.Brush(self.BackgroundColour)
         dc.Clear()
-
-        # Draw outer border
-        dc.Pen = wx.Pen(ClockSelector.COLOUR_LINES)
-        dc.Brush = wx.Brush(self.BackgroundColour, wx.SOLID)
-        dc.DrawRoundedRectangle(0, 0, width, height, 8)
 
         # Draw highlighted sectors
         dc.Pen = wx.TRANSPARENT_PEN
         dc.Brush = wx.Brush(ClockSelector.COLOUR_ON, wx.SOLID)
         for sect in (x for i, x in enumerate(self.sectors) if self.selections[i]):
             dc.DrawPolygon(sect)
+
+        # Draw outer border
+        dc.Pen = wx.Pen(ClockSelector.COLOUR_LINES)
+        dc.Brush = wx.TRANSPARENT_BRUSH
+        dc.DrawRectangle(0, 0, width, height)
 
         # Draw hour lines and write hours
         dc.Pen = wx.Pen(ClockSelector.COLOUR_LINES, width=1)
@@ -1886,7 +1926,7 @@ class BitmapComboBox(wx.adv.OwnerDrawnComboBox):
 
         value = self._items[item]
         img, _, _ = self._imagehandler.LoadThumbnail(value, self._bitmapsize)
-        dc.DrawBitmap(img.ConvertToBitmap(), rect.x + 1, rect.y + 1)
+        if img: dc.DrawBitmap(img.ConvertToBitmap(), rect.x + 1, rect.y + 1)
 
 
     def GetItemValue(self, index):
@@ -2234,9 +2274,11 @@ class ThemeImaging(object):
 
 
     @classmethod
-    def Add(cls, name, theme, supported=True):
+    def Add(cls, name, theme, supported=None):
         """Registers or overwrites theme bitmap."""
-        cls._themes[name] = {"theme": copy.deepcopy(theme), "supported": supported}
+        opts = {"theme": copy.deepcopy(theme)}
+        if supported is not None: opts["supported"] = supported
+        cls._themes.setdefault(name, {}).update(opts)
         cls._bitmaps.pop(name, None)
         for c in cls._ctrls: c.Refresh()
 
@@ -2251,7 +2293,7 @@ class ThemeImaging(object):
     def GetBitmap(cls, name, border=False, label=None):
         """Returns bitmap for named theme, created with other args."""
         args = dict(border=border, label=label)
-        if not cls._themes[name]["supported"]:
+        if cls._themes[name].get("supported") == False:
             args["supported"] = False
         key = tuple((k, bool(v)) for k, v in args.items() if v)
         cls._bitmaps.setdefault(name, {})
@@ -2259,6 +2301,13 @@ class ThemeImaging(object):
             bmp = get_theme_bitmap(cls._themes[name]["theme"], **args)
             cls._bitmaps[name][key] = bmp
         return cls._bitmaps[name][key]
+
+
+    @classmethod
+    def IsSupported(cls, theme):
+        """Returns whether theme has been marked as supported or not, or None."""
+        opts = next((x for x in cls._themes.values() if x["theme"] == theme), None)
+        if opts and "supported" in opts: return opts["supported"]
 
 
     @classmethod
@@ -2414,7 +2463,8 @@ def get_colour_bitmap(colour, size=(16, 16)):
     dc.DrawRectangle(1, 1, size[0] - 2, size[1] - 2)
 
     pts = (1, 1), (1, size[1] - 2), (size[0] - 2, 1), (size[0] - 2, size[1] - 2)
-    dc.Pen = wx.TRANSPARENT_PEN
+    dc.Pen = wx.TRANSPARENT_PEN if "nt" == os.name else \
+             wx.Pen(ColourManager.GetColour(wx.SYS_COLOUR_WINDOW))
     dc.DrawPointList(pts)
 
     del dc
