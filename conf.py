@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    10.09.2020
+@modified    11.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev31"
+Version = "2.0.dev32"
 
-VersionDate = "10.09.2020"
+VersionDate = "11.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -157,7 +157,7 @@ Schedule = []
 
 """
 The default schedule, [1,0,..] per each quarter hour
-(21->05 on, 06->20 off).
+(21->06 on, 07->20 off).
 """
 DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
 

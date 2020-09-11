@@ -25,6 +25,9 @@ Schedule can be set in quarter-hour steps.
 
 Works under Windows, *might* work under Linux/OSX.
 
+If launching the program manually, `--start-minimized` command-line option
+will auto-hide the settings window initially.
+
 Run `python nightfall.py` if using the source distribution.
 
 
@@ -37,6 +40,8 @@ If running as a Python script, NightFall requires Python 2.7 and wxPython
 
 Attribution
 -----------
+
+Built with Python (https://python.org) and wxPython (https://wxpython.org).
 
 Includes several icons from Fugue Icons,
 (c) 2010 Yusuke Kamiyamane, https://p.yusukekamiyamane.com.

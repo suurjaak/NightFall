@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    10.09.2020
+@modified    11.09.2020
 """
 import collections
 import copy
@@ -56,6 +56,7 @@ class Dimmer(object):
     STARTUP POSSIBLE    can program be added to system startup         data=enabled
     STARTUP TOGGLED     running program at system startup has changed  data=enabled
     THEME CHANGED       dimming theme has changed                      data=theme
+    THEME APPLIED       dimming fade step have been completed          data=targettheme
     THEME STEPPED       dimming fade step has been applied             data=steppedtheme
     """
 
@@ -73,7 +74,6 @@ class Dimmer(object):
         self.fade_target_theme   = None # Final theme values during fade
         self.fade_current_theme  = None # Theme float values during fade
         self.fade_original_theme = None # Original theme before applying fade
-        self.fade_info = None # Info given for applying/setting theme
 
         self.timer = wx.Timer()
         self.timer.Bind(wx.EVT_TIMER, self.on_timer, self.timer)
@@ -158,10 +158,10 @@ class Dimmer(object):
         self.apply_theme(conf.NormalTheme)
 
 
-    def post_event(self, topic, data=None, info=None):
+    def post_event(self, topic, data=None):
         """Sends a message event to the event handler."""
         if not self.handler: return
-        event = DimmerEvent(Topic=topic, Data=data, Info=info)
+        event = DimmerEvent(Topic=topic, Data=data)
         wx.PostEvent(self.handler, event)
 
 
@@ -170,10 +170,8 @@ class Dimmer(object):
         Handler for a timer tick, checks whether to apply/unapply theme
         according to schedule, or whether theme should no longer be suspended.
         """
-        if not conf.ManualEnabled and not conf.ScheduleEnabled: return
-
-        if conf.SuspendedUntil and conf.SuspendedUntil <= datetime.datetime.now() \
-        or conf.SuspendedUntil and not conf.ManualEnabled and not conf.ScheduleEnabled:
+        if conf.SuspendedUntil and (not self.should_dim() 
+        or conf.SuspendedUntil <= datetime.datetime.now()):
             conf.SuspendedUntil = None
             self.post_event("SUSPEND TOGGLED", False)
         theme, msg = conf.NormalTheme, "NORMAL DISPLAY"
@@ -190,15 +188,19 @@ class Dimmer(object):
         """Toggles manual dimming on/off."""
         enabled = bool(enabled)
         changed = (conf.ManualEnabled != enabled)
+
+        if not enabled and conf.SuspendedUntil and not self.should_dim_scheduled():
+            conf.SuspendedUntil = None
+            self.post_event("SUSPEND TOGGLED", False)
         conf.ManualEnabled = enabled
-        msg = "MANUAL TOGGLED"
+        if changed: conf.save()
+        self.post_event("MANUAL TOGGLED", conf.ManualEnabled)
+        if conf.SuspendedUntil: return
+
+        theme = conf.NormalTheme
         if self.should_dim():
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-        else:
-            theme = conf.NormalTheme
         self.apply_theme(theme, fade=True)
-        if changed: conf.save()
-        self.post_event(msg, conf.ManualEnabled)
         if changed and conf.ManualEnabled:
             self.post_event("MANUAL IN EFFECT", theme)
 
@@ -215,6 +217,8 @@ class Dimmer(object):
         conf.ScheduleEnabled = enabled
         self.post_event("SCHEDULE TOGGLED", conf.ScheduleEnabled)
         conf.save()
+        if conf.SuspendedUntil: return
+
         theme, msg = conf.NormalTheme, "NORMAL DISPLAY"
         if self.should_dim():
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
@@ -249,15 +253,15 @@ class Dimmer(object):
                   "MANUAL IN EFFECT"
             start, theme = None, conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
         conf.SuspendedUntil = start
-        self.post_event("SUSPEND TOGGLED", enabled, start)
-        self.apply_theme(theme, msg, fade=True)
+        self.post_event("SUSPEND TOGGLED", enabled)
+        self.post_event(msg, theme)
+        self.apply_theme(theme, fade=True)
 
 
-    def apply_theme(self, theme, info=None, fade=False):
+    def apply_theme(self, theme, fade=False):
         """
         Applies the specified colour theme.
 
-        @param   info   info given to callback event, if any
         @param   fade   if True, changes theme from current to new smoothly,
                         in a number of steps
         @return         False on immediate failure, True otherwise
@@ -265,14 +269,10 @@ class Dimmer(object):
         result = True
         if self.fade_timer:
             self.fade_timer.Stop()
-            self.fade_target_theme = self.fade_info = None
+            self.fade_target_theme = None
             self.fade_delta = self.fade_steps = self.fade_timer = None
             self.fade_current_theme = self.fade_original_theme = None
-
-        if False == ThemeImaging.IsSupported(self.current_theme):
-            fade = False
         if conf.FadeSteps > 0 and fade and theme != self.current_theme:
-            self.fade_info = info
             self.fade_steps = conf.FadeSteps
             self.fade_target_theme = theme[:]
             self.fade_current_theme = map(float, self.current_theme)
@@ -284,7 +284,8 @@ class Dimmer(object):
         else:
             result = gamma.set_screen_gamma(theme)
             self.current_theme = theme[:]
-            if not result: self.post_event("THEME FAILED", theme, info)
+            ThemeImaging.MarkSupported(theme, result)
+            if not result: self.post_event("THEME FAILED", theme)
         return result
 
 
@@ -305,7 +306,8 @@ class Dimmer(object):
             self.post_event("SUSPEND TOGGLED", False)
         conf.save()
         self.post_event("SCHEDULE CHANGED", conf.Schedule)
-        if did_dim_scheduled and self.should_dim_scheduled(): return
+        if conf.SuspendedUntil \
+        or did_dim_scheduled and self.should_dim_scheduled(): return
 
         theme, msg = conf.NormalTheme, "NORMAL DISPLAY"
         if self.should_dim():
@@ -316,19 +318,19 @@ class Dimmer(object):
         self.post_event(msg, theme)
 
 
-    def set_theme(self, theme, info=None, fade=False):
+    def set_theme(self, theme, fade=False):
         """
         Sets the screen dimming theme, and applies it if enabled.
 
         @param   theme  a 4-byte list, for 3 RGB channels and brightness, 0..255
-        @param   info   info given to callback event, if any
         @param   fade   if True, changes theme from current to new smoothly,
                         in a number of steps
         """
         changed = (theme != self.current_theme)
         if changed:
-            self.post_event("THEME CHANGED", theme, info)
-            if self.should_dim(): self.apply_theme(theme, info, fade=fade)
+            self.post_event("THEME CHANGED", theme)
+            if self.should_dim() and not conf.SuspendedUntil:
+                self.apply_theme(theme, fade=fade)
         conf.save()
 
 
@@ -371,12 +373,11 @@ class Dimmer(object):
         else:
             current_theme = map(int, map(round, self.fade_current_theme))
         success = self.apply_theme(current_theme)
-        if success and self.fade_steps:
-            # Send incremental change if fading from one theme to another
-            self.post_event("THEME STEPPED", current_theme)
-        elif success:
-            self.post_event("THEME APPLIED", self.fade_target_theme)
-        else:
+        if success:
+            msg = "THEME STEPPED" if self.fade_steps else "THEME APPLIED"
+            theme = current_theme if self.fade_steps else self.fade_target_theme
+            self.post_event(msg, theme)
+        elif not self.fade_steps:
             # Unsupported theme: jump back to normal on last step.
             self.apply_theme(conf.NormalTheme)
             self.current_theme = current_theme[:]
@@ -384,7 +385,7 @@ class Dimmer(object):
             self.fade_timer = wx.CallLater(conf.FadeDelay, self.on_fade_step)
         else:
             self.fade_target_theme = None
-            self.fade_delta = self.fade_steps = self.fade_info = None
+            self.fade_delta = self.fade_steps = None
             self.fade_current_theme = self.fade_original_theme = None
 
 
@@ -472,11 +473,11 @@ class NightFall(wx.App):
 
     def on_dimmer_event(self, event):
         """Handler for all events sent from Dimmer, updates UI state."""
-        topic, data, info = event.Topic, event.Data, event.Info
+        topic, data = event.Topic, event.Data
         if "THEME FAILED" == topic:
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-            ThemeImaging.Add(conf.ThemeName or self.unsaved_name(), theme, supported=False)
-            self.frame.combo_themes.ToolTip = get_theme_str(theme, supported=False)
+            ThemeImaging.Add(conf.ThemeName or self.unsaved_name(), theme)
+            self.frame.combo_themes.ToolTip = ThemeImaging.Repr(theme)
             if not conf.ThemeName or conf.ThemeName == conf.UnsavedName:
                 self.frame.combo_editor.ToolTip = self.frame.combo_themes.ToolTip
 
@@ -522,10 +523,10 @@ class NightFall(wx.App):
             self.set_tray_icon(self.TRAYICONS[False][conf.ScheduleEnabled])
             self.update_suspend()
 
-        if set(("THEME APPLIED", "THEME CHANGED")) & set((topic, info)):
+        if topic in ("THEME APPLIED", "THEME CHANGED"):
             if not conf.ThemeName and conf.UnsavedTheme and data == conf.UnsavedTheme:
                 ThemeImaging.Add(self.unsaved_name(), data)
-                tooltip = get_theme_str(data)
+                tooltip = ThemeImaging.Repr(data)
                 self.frame.combo_editor.ToolTip = self.frame.combo_themes.ToolTip = tooltip
             self.frame.label_error.Hide()
 
@@ -591,7 +592,7 @@ class NightFall(wx.App):
         self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name))
         if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
         self.dimmer.toggle_suspend(False)
-        self.dimmer.set_theme(conf.Themes[name], "THEME APPLIED", fade=True)
+        self.dimmer.set_theme(conf.Themes[name], fade=True)
 
 
     def on_select_combo_themes(self, event):
@@ -600,7 +601,7 @@ class NightFall(wx.App):
         theme = conf.Themes.get(name, conf.UnsavedTheme)
         conf.ThemeName = name if event.Selection or not conf.UnsavedTheme else None
         self.dimmer.toggle_suspend(False)
-        self.dimmer.set_theme(theme, "THEME CHANGED", fade=True)
+        self.dimmer.set_theme(theme, fade=True)
 
 
     def on_select_combo_editor(self, event):
@@ -625,19 +626,19 @@ class NightFall(wx.App):
             conf.UnsavedTheme = None
             for c in cmb, cmb2:
                 c.Delete(0), c.SetSelection(event.Selection - 1)
-            cmb.ToolTip = get_theme_str(conf.Themes[cmb.Value])
+            cmb.ToolTip = ThemeImaging.Repr(conf.Themes[cmb.Value])
             ThemeImaging.Remove(self.unsaved_name())
 
         theme = conf.Themes.get(name, conf.UnsavedTheme)
         conf.UnsavedName = name
         conf.UnsavedTheme = None if name in conf.Themes else theme
-        cmb2.ToolTip = get_theme_str(theme)
+        cmb2.ToolTip = ThemeImaging.Repr(theme)
         for s, v in zip(self.frame.sliders, theme): s.Value, s.ToolTip = v, str(v)
         if self.dimmer.should_dim():
             conf.ThemeName = name
             cmb.SetSelection(cmb.FindItem(name))
             self.dimmer.toggle_suspend(False)
-            self.dimmer.set_theme(theme, "THEME CHANGED", fade=True)
+            self.dimmer.set_theme(theme, fade=True)
 
 
     def on_change_theme_slider(self, event):
@@ -658,19 +659,19 @@ class NightFall(wx.App):
             cmb2.Insert(self.unsaved_name(), 0)
         conf.UnsavedTheme = theme
         cmb2.SetSelection(0)
-        cmb2.ToolTip = get_theme_str(theme)
+        cmb2.ToolTip = ThemeImaging.Repr(theme)
         if self.dimmer.should_dim():
             conf.ThemeName = None
             cmb.SetSelection(0)
             cmb.ToolTip = cmb2.ToolTip
             self.dimmer.toggle_suspend(False)
-            self.dimmer.set_theme(theme, "THEME MODIFIED")
+            self.dimmer.set_theme(theme)
 
 
     def on_save_theme(self, event=None):
         """Stores the currently set rgb+brightness values in theme editor."""
         theme = conf.UnsavedTheme or conf.Themes[conf.UnsavedName]
-        name0 = name = conf.UnsavedName or get_theme_str(theme, short=True)
+        name0 = name = conf.UnsavedName or ThemeImaging.Repr(theme, short=True)
 
         dlg = wx.TextEntryDialog(self.frame, "Name:", conf.Title,
                                  value=name, style=wx.OK | wx.CANCEL)
@@ -681,15 +682,17 @@ class NightFall(wx.App):
         if not name: return
 
         cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
-        if theme == conf.Themes.get(name): # No change
-            if conf.UnsavedTheme:
+        if theme == conf.Themes.get(name): # No change from saved
+            if conf.UnsavedTheme: # Had changes before
                 idx_v = cmb.GetSelection()
-                for c in cmb, cmb2: c.Delete(0)
-                if not idx_v: cmb.SetSelection(cmb.FindItem(name))
+                for c in cmb, cmb2: c.Delete(0) # Discard unsaved item
+                if not idx_v: # Was unsaved selected
+                    cmb.SetSelection(cmb.FindItem(name))
                 cmb2.SetSelection(cmb2.FindItem(name))
                 ThemeImaging.Remove(self.unsaved_name())
                 conf.UnsavedTheme = None
                 conf.save()
+            ThemeImaging.Add(name, theme)
             return
 
         theme_existed = name in conf.Themes
@@ -738,7 +741,7 @@ class NightFall(wx.App):
         conf.UnsavedName = name2
         conf.save()
         cmb2.SetSelection(cmb2.FindItem(name2))
-        cmb2.ToolTip = get_theme_str(theme2)
+        cmb2.ToolTip = ThemeImaging.Repr(theme2)
         for s, v in zip(self.frame.sliders, theme2): s.Value, s.ToolTip = v, str(v)
         if was_unsaved_selected:
             cmb.SetSelection(cmb.FindItem(name2))
@@ -796,13 +799,13 @@ class NightFall(wx.App):
                 name2, theme2 = c.Value, conf.Themes[c.Value]
                 if c is cmb:
                     conf.ThemeName = name2
-                    self.dimmer.set_theme(theme2, "THEME CHANGED", fade=True)
+                    self.dimmer.set_theme(theme2, fade=True)
                 else:
                     conf.UnsavedName = name2
                     if was_unsaved: conf.UnsavedTheme = None
                     for s, v in zip(self.frame.sliders, theme2):
                         s.Value, s.ToolTip = v, str(v)
-                c.ToolTip = get_theme_str(theme2)
+                c.ToolTip = ThemeImaging.Repr(theme2)
 
         if not conf.Themes and not conf.UnsavedTheme:
             # Deleted last theme and nothing being modified: add something at least
@@ -811,8 +814,8 @@ class NightFall(wx.App):
             for c in cmb, cmb2:
                 c.Insert(self.unsaved_name(), 0)
                 c.SetSelection(0)
-                c.ToolTip = get_theme_str(theme)
-            self.dimmer.set_theme(theme, "THEME CHANGED", fade=True)
+                c.ToolTip = ThemeImaging.Repr(theme)
+            self.dimmer.set_theme(theme, fade=True)
         conf.save()
 
 
@@ -835,18 +838,14 @@ class NightFall(wx.App):
             self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name))
             if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
             self.dimmer.toggle_suspend(False)
-            self.dimmer.set_theme(theme, "THEME APPLIED", fade=True)
+            self.dimmer.set_theme(theme, fade=True)
 
         def on_suspend_interval(interval, event):
             if not event.IsChecked(): return self.on_toggle_suspend()
 
             self.suspend_interval = interval
             conf.SuspendedUntil = dt + datetime.timedelta(minutes=interval)
-            args = {"graycolour": ColourManager.ColourHex(wx.SYS_COLOUR_GRAYTEXT),
-                    "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT),
-                    "time":       conf.SuspendedUntil.strftime("%H:%M")}
-            self.frame.label_suspend.SetPage(conf.SuspendedHTMLTemplate % args)
-            self.frame.label_suspend.BackgroundColour = ColourManager.GetColour(wx.SYS_COLOUR_WINDOW)
+            self.update_suspend()
 
 
         is_dimming = self.dimmer.should_dim()
@@ -1224,7 +1223,7 @@ class NightFall(wx.App):
             size=(-1, 16), style=wx.html.HW_SCROLLBAR_NEVER)
         ColourManager.Manage(label_suspend, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         label_suspend.SetBorders(0)
-        label_suspend.ToolTip = "Click link to change interval"
+        label_suspend.ToolTip = "Click on time to change interval"
         label_suspend.Hide()
         frame.button_suspend = wx.Button(panel_config, label=conf.SuspendOnLabel)
         frame.button_suspend.ToolTip = conf.SuspendOnToolTip
@@ -1255,7 +1254,7 @@ class NightFall(wx.App):
         # Create saved themes page
         list_themes = BitmapListCtrl(panel_themes, imagehandler=ThemeImaging)
         list_themes.SetThumbSize(*conf.ThemeBitmapSize, border=5)
-        list_themes.SetToolTipFunction(lambda n: get_theme_str(conf.Themes[n]))
+        list_themes.SetToolTipFunction(lambda n: ThemeImaging.Repr(conf.Themes[n]))
         ColourManager.Manage(list_themes, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         frame.list_themes = list_themes
 
@@ -1292,7 +1291,7 @@ class NightFall(wx.App):
         frame.sliders = []
         kws = dict(red=0, green=0, blue=0)
         for i, text in enumerate(["brightness", "red", "green", "blue"]):
-            if i: bmp1, bmp2 = [get_colour_bitmap(wx.Colour(**dict(kws, **{text: x})))
+            if i: bmp1, bmp2 = [make_colour_bitmap(wx.Colour(**dict(kws, **{text: x})))
                                 for x in conf.ValidColourRange]
             else: bmp1, bmp2 = map(wx.Bitmap,         conf.BrightnessIcons)
             sbmp1 = wx.StaticBitmap(panel_editor, bitmap=bmp1)
@@ -1427,7 +1426,7 @@ class NightFall(wx.App):
             if idx >= 0:
                 ctrl.SetSelection(idx)
                 theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-                ctrl.ToolTip = get_theme_str(theme)
+                ctrl.ToolTip = ThemeImaging.Repr(theme)
         if conf.ThemeName:
             lst.SetSelection(lst.FindItem(conf.ThemeName))
             enabled = (0 <= lst.GetSelection() < lst.GetItemCount())
@@ -2268,19 +2267,20 @@ class ThemeImaging(object):
     Loader for theme images, uses dynamically generated bitmaps.
     Suitable as imagehandler for wx.lib.agw.thumbnailctrl.ThumbnailCtrl.
     """
-    _themes  = {} # {name: {theme, supported}, }
-    _bitmaps = {} # {name: {args: wx.Bitmap}, }
-    _ctrls   = set()
+    _themes    = {} # {name: theme, }
+    _bitmaps   = {} # {name: {args: wx.Bitmap}, }
+    _supported = {} # {theme: bool, }
+    _ctrls     = set() # {control to refresh on registering theme, }
 
 
     @classmethod
-    def Add(cls, name, theme, supported=None):
+    def Add(cls, name, theme):
         """Registers or overwrites theme bitmap."""
-        opts = {"theme": copy.deepcopy(theme)}
-        if supported is not None: opts["supported"] = supported
-        cls._themes.setdefault(name, {}).update(opts)
+        cls._themes[name] = copy.deepcopy(theme)
         cls._bitmaps.pop(name, None)
-        for c in cls._ctrls: c.Refresh()
+        for c in list(cls._ctrls):
+            if c: c.Refresh()
+            else: cls._ctrls.discard(c) # Widget destroyed
 
 
     @classmethod
@@ -2292,22 +2292,26 @@ class ThemeImaging(object):
     @classmethod
     def GetBitmap(cls, name, border=False, label=None):
         """Returns bitmap for named theme, created with other args."""
-        args = dict(border=border, label=label)
-        if cls._themes[name].get("supported") == False:
+        theme, args = cls._themes[name], dict(border=border, label=label)
+        if cls._supported.get(tuple(theme)) == False:
             args["supported"] = False
         key = tuple((k, bool(v)) for k, v in args.items() if v)
         cls._bitmaps.setdefault(name, {})
         if key not in cls._bitmaps[name]:
-            bmp = get_theme_bitmap(cls._themes[name]["theme"], **args)
+            bmp = cls.MakeBitmap(theme, **args)
             cls._bitmaps[name][key] = bmp
         return cls._bitmaps[name][key]
 
 
     @classmethod
     def IsSupported(cls, theme):
-        """Returns whether theme has been marked as supported or not, or None."""
-        opts = next((x for x in cls._themes.values() if x["theme"] == theme), None)
-        if opts and "supported" in opts: return opts["supported"]
+        """Returns whether theme has been marked as supported, or None."""
+        return cls._supported.get(tuple(theme))
+
+
+    @classmethod
+    def MarkSupported(cls, theme, supported=True):
+        if not supported: cls._supported[tuple(theme)] = bool(supported)
 
 
     @classmethod
@@ -2320,6 +2324,96 @@ class ThemeImaging(object):
     def ClearCache(cls):
         """Clears generated bitmap cache."""
         cls._bitmaps.clear()
+
+
+    @classmethod
+    def Repr(cls, theme, supported=True, short=False):
+        """Returns a readable string representation of the theme."""
+        btext = "%d%%" % math.ceil(100 * (theme[-1] + 1) / conf.NormalBrightness)
+        if short:
+            result = "%s #%2X%2X%2X" % ((btext, ) + tuple(theme[:3]))
+        else:
+            result = "%s brightness.\n%s" % (btext,
+                     ", ".join("%s at %d%%" % (s, theme[i] / 255. * 100)
+                               for i, s in enumerate(("Red", "green", "blue"))))
+            if not supported:
+                result += "\n\nNot supported by hardware."
+        return result
+
+
+    @classmethod
+    def MakeBitmap(cls, theme, supported=True, border=False, label=None):
+        """
+        Returns a wx.Bitmap for the specified theme, with colour and brightness
+        information as both text and visual.
+        
+        @param   supported  whether the theme is supported by hardware
+        @param   border     whether to draw border around bitmap
+        @param   label      label to draw underneath, if any
+        """
+        size = conf.ThemeBitmapSize if label is None else conf.ThemeNamedBitmapSize
+        bmp = wx.Bitmap(size)
+        dc = wx.MemoryDC(bmp)
+        dc.SetBackground(wx.Brush(wx.Colour(*theme[:-1])))
+        dc.Clear() # Floodfill background with theme colour
+
+        btext = "%d%%" % math.ceil(100 * (theme[-1] + 1) / conf.NormalBrightness)
+        dc.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
+                           wx.FONTWEIGHT_BOLD, faceName="Tahoma"))
+        twidth, theight = dc.GetTextExtent(btext)
+        ystart = (conf.ThemeBitmapSize[1] - theight) / 2 - 4
+
+        # Draw brightness text shadow (dark text shifted +-1px from each corner)
+        dc.SetTextForeground(wx.BLACK)
+        for dx, dy in [(-1, 1), (1, 1), (1, -1), (-1, -1)]:
+            dc.DrawText(btext, (size[0] - twidth) / 2 + dx, ystart + dy)
+            
+        # Draw brightness text
+        dc.SetTextForeground(wx.WHITE)
+        dc.DrawText(btext, (size[0] - twidth) / 2, ystart)
+
+        # Draw colour code on white background
+        dc.SetFont(wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
+                           wx.FONTWEIGHT_BOLD, faceName="Terminal"))
+        ctext = "#%2X%2X%2X" % tuple(theme[:-1])
+        cwidth, cheight = dc.GetTextExtent(ctext)
+        dc.Brush, dc.Pen = wx.WHITE_BRUSH, wx.WHITE_PEN
+        ystart = conf.ThemeBitmapSize[1] - cheight
+        dc.DrawRectangle(0, ystart - 3, *bmp.Size)
+        dc.Pen = wx.LIGHT_GREY_PEN # Draw separator above colour code
+        dc.DrawLine(0, ystart - 4, bmp.Size[0], ystart - 4)
+        dc.SetTextForeground(wx.BLACK if supported else wx.RED)
+        dc.DrawText(ctext, (bmp.Size[0] - cwidth) / 2 - 1, ystart - 1)
+        dc.DrawLine(0, ystart + cheight, bmp.Size[0], ystart + cheight)
+
+        if border: # Draw outer border
+            dc.Brush, dc.Pen = wx.TRANSPARENT_BRUSH, wx.LIGHT_GREY_PEN
+            dc.DrawRectangle(0, 0, *bmp.Size)
+
+        if not supported: # Draw unsupported cross-through
+            dc.Pen = wx.RED_PEN
+            dc.DrawLine(0, 0, *conf.ThemeBitmapSize)
+            dc.DrawLine(0, conf.ThemeBitmapSize[1], size[0], 0)
+
+        if label is not None:
+            ystart, ystop = conf.ThemeBitmapSize[1], conf.ThemeNamedBitmapSize[1]
+            dc.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
+                               wx.FONTWEIGHT_BOLD, faceName="Arial"))
+            dc.Brush = wx.Brush(ColourManager.GetColour(wx.SYS_COLOUR_WINDOW))
+            dc.Pen   = wx.Pen(ColourManager.GetColour(wx.SYS_COLOUR_WINDOW))
+            dc.DrawRectangle(0, ystart, size[0], ystop)
+
+            text = text0 = label
+            (tw, th), cut = dc.GetTextExtent(text), 0
+            while tw > size[0]: # Ellipsize from the beginning until text fits
+                cut += 1
+                text = ".." + text0[cut:]
+                tw, th = dc.GetTextExtent(text)
+            dc.SetTextForeground("#7D7D7D") # Same as hard-coded in ThumbnailCtrl
+            dc.DrawText(text, (size[0] - tw) / 2, ystart)
+
+        del dc
+        return bmp
 
 
     def LoadThumbnail(self, filename, thumbnailsize=None):
@@ -2364,95 +2458,7 @@ class KEYS(object):
 
 
 
-def get_theme_bitmap(theme, supported=True, border=False, label=None):
-    """
-    Returns a wx.Bitmap for the specified theme, with colour and brightness
-    information as both text and visual.
-    
-    @param   supported  whether the theme is supported by hardware
-    @param   border     whether to draw border around bitmap
-    @param   label      label to draw underneath, if any
-    """
-    size = conf.ThemeBitmapSize if label is None else conf.ThemeNamedBitmapSize
-    bmp = wx.Bitmap(size)
-    dc = wx.MemoryDC(bmp)
-    dc.SetBackground(wx.Brush(wx.Colour(*theme[:-1])))
-    dc.Clear() # Floodfill background with theme colour
-
-    btext = "%d%%" % math.ceil(100 * (theme[-1] + 1) / conf.NormalBrightness)
-    dc.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                       wx.FONTWEIGHT_BOLD, faceName="Tahoma"))
-    twidth, theight = dc.GetTextExtent(btext)
-    ystart = (conf.ThemeBitmapSize[1] - theight) / 2 - 4
-
-    # Draw brightness text shadow (dark text shifted +-1px from each corner)
-    dc.SetTextForeground(wx.BLACK)
-    for dx, dy in [(-1, 1), (1, 1), (1, -1), (-1, -1)]:
-        dc.DrawText(btext, (size[0] - twidth) / 2 + dx, ystart + dy)
-        
-    # Draw brightness text
-    dc.SetTextForeground(wx.WHITE)
-    dc.DrawText(btext, (size[0] - twidth) / 2, ystart)
-
-    # Draw colour code on white background
-    dc.SetFont(wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
-                       wx.FONTWEIGHT_BOLD, faceName="Terminal"))
-    ctext = "#%2X%2X%2X" % tuple(theme[:-1])
-    cwidth, cheight = dc.GetTextExtent(ctext)
-    dc.Brush, dc.Pen = wx.WHITE_BRUSH, wx.WHITE_PEN
-    ystart = conf.ThemeBitmapSize[1] - cheight
-    dc.DrawRectangle(0, ystart - 3, *bmp.Size)
-    dc.Pen = wx.LIGHT_GREY_PEN # Draw separator above colour code
-    dc.DrawLine(0, ystart - 4, bmp.Size[0], ystart - 4)
-    dc.SetTextForeground(wx.BLACK if supported else wx.RED)
-    dc.DrawText(ctext, (bmp.Size[0] - cwidth) / 2 - 1, ystart - 1)
-    dc.DrawLine(0, ystart + cheight, bmp.Size[0], ystart + cheight)
-
-    if border: # Draw outer border
-        dc.Brush, dc.Pen = wx.TRANSPARENT_BRUSH, wx.LIGHT_GREY_PEN
-        dc.DrawRectangle(0, 0, *bmp.Size)
-
-    if not supported: # Draw unsupported cross-through
-        dc.Pen = wx.RED_PEN
-        dc.DrawLine(0, 0, *conf.ThemeBitmapSize)
-        dc.DrawLine(0, conf.ThemeBitmapSize[1], size[0], 0)
-
-    if label is not None:
-        ystart, ystop = conf.ThemeBitmapSize[1], conf.ThemeNamedBitmapSize[1]
-        dc.SetFont(wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
-                           wx.FONTWEIGHT_BOLD, faceName="Arial"))
-        dc.Brush = wx.Brush(ColourManager.GetColour(wx.SYS_COLOUR_WINDOW))
-        dc.Pen   = wx.Pen(ColourManager.GetColour(wx.SYS_COLOUR_WINDOW))
-        dc.DrawRectangle(0, ystart, size[0], ystop)
-
-        text = text0 = label
-        (tw, th), cut = dc.GetTextExtent(text), 0
-        while tw > size[0]: # Ellipsize from the beginning until text fits
-            cut += 1
-            text = ".." + text0[cut:]
-            tw, th = dc.GetTextExtent(text)
-        dc.SetTextForeground("#7D7D7D") # Same as hard-coded in ThumbnailCtrl
-        dc.DrawText(text, (size[0] - tw) / 2, ystart)
-
-    del dc
-    return bmp
-
-
-def get_theme_str(theme, supported=True, short=False):
-    """Returns a readable string representation of the theme."""
-    btext = "%d%%" % math.ceil(100 * (theme[-1] + 1) / conf.NormalBrightness)
-    if short:
-        result = "%s #%2X%2X%2X" % ((btext, ) + tuple(theme[:3]))
-    else:
-        result = "%s brightness.\n%s" % (btext,
-                 ", ".join("%s at %d%%" % (s, theme[i] / 255. * 100)
-                           for i, s in enumerate(("Red", "green", "blue"))))
-        if not supported:
-            result += "\n\nNot supported by hardware."
-    return result
-
-
-def get_colour_bitmap(colour, size=(16, 16)):
+def make_colour_bitmap(colour, size=(16, 16)):
     """Returns a rounded wx.Bitmap filled with specified colour."""
     bmp = wx.Bitmap(size)
     dc = wx.MemoryDC(bmp)
