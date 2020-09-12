@@ -43,30 +43,68 @@
       </header>
       <section>
 
-<p>A small tray program for making screen colours darker and softer during
-late hours. Currently works under Windows, <em>might</em> work under Linux/OSX.</p>
+<p>A small tray program that can change screen brightness and colour gamma settings
+on schedule, in order to achieve a more natural feeling during late hours.</p>
+
+<p>Looking at a lit screen in a dark room can interfere with the sleep cycle,
+NightFall can provide a warm-coloured darker screen on desktop and laptop 
+computers alike.</p>
+
+<p>Comes with a number of pre-defined brightness and colour themes, you can
+also create and save your own themes.</p>
+
+<p>Screenshot collage: <br />
+<a href="img/collage.png"><img src="img/th_collage.png" /></a>
+</p>
+
 
 <h2>Using The Program</h2>
 
-<p>Run "python nightfall.py", or launch the precompiled Windows executable.
-It will stay in the system tray as a grey or orange moon icon, depending on
-being active, and will dim the screen on command or according to hours
-scheduled in settings.</p>
+<p>NightFall stays in the system tray as a grey or orange moon icon, depending on
+being active, dimming the screen on command or according to the set schedule.</p>
+
+<p>Schedule can be set in quarter-hour steps.<br />
+Applied theme can be suspended for a selected number of minutes.</p>
+
+<p>Double-clicking the tray icon toggles current colour theme on or off;
+on by schedule if schedule covers current time but is currently disabled.<br />
+Single-clicking the tray icon shows or hides the options window.<br />
+Right-clicking the tray icon opens options menu.</p>
+
+<p>Left-clicking on time schedule toggles time period on, right-clicking off,
+same for clicking and dragging.<br />
+Double-clicking on time schedule toggles an entire hour on or off.<br />
+Scrolling the mouse wheel on time schedule grows or shrinks the current
+active section.</p>
+
+<br />
+
+<p>Works under Windows, <em>might</em> work under Linux/OSX.</p>
+
+<p>If launching the program manually, <code>--start-minimized</code> command-line option
+will auto-hide the settings window initially.</p>
+
+<p>Run <code>python nightfall.py</code> if using the source distribution.<p>
+
 
 <h2>Dependencies</h2>
 
-<p>If running as a Python script, NightFall requires Python 2.6+ and wx.Python
-2.8+ (<a href="http://wxpython.org/">http://wxpython.org/</a>)</p>
+<p>If running as a Python script, NightFall requires Python 2.7 and wxPython
+4.0+ (<a href="https://wxpython.org/">wxpython.org</a>)</p>
+
 
 <h2>Attribution</h2>
 
-<p>NightFall includes bits of code in gamma.py from PsychoPy 1.75
-(<a href="http://www.psychopy.org/epydoc/psychopy.gamma-pysrc.html">http://www.psychopy.org/epydoc/psychopy.gamma-pysrc.html</a>), released under the
-compatible GNU General Public License v3; and from Windows Routines 2.2.1 by
-Jason R. Coombs,
-(<a href="http://pydoc.net/jaraco.windows/2.2.1/jaraco.windows.error">http://pydoc.net/jaraco.windows/2.2.1/jaraco.windows.error</a>), released under
-the MIT License.</p>
-<p>Windows binaries built with PyInstaller 2.0 (http://www.pyinstaller.org/).</p>
+<p>Built with Python (<a href="https://python.org">python.org</a>) and wxPython (<a href="https://wxpython.org">wxpython.org</a>).<p>
+
+<p>Includes several icons from Fugue Icons,
+&copy; 2010 Yusuke Kamiyamane, <a href="https://p.yusukekamiyamane.com">p.yusukekamiyamane.com</a>.<p>
+
+<p>Windows binaries built with PyInstaller (<a href="https://www.pyinstaller.org">pyinstaller.org</a>).</p>
+
+<p>Installers created with Nullsoft Scriptable Install System
+(<a href="https://nsis.sourceforge.io">nsis.sourceforge.io</a>).</p>
+
 
 <h2>License</h2>
 
@@ -84,13 +122,14 @@ furnished to do so, subject to the following conditions:</p>
 <p>The above copyright notice and this permission notice shall be included in
 all copies or substantial portions of the Software.</p>
 
-<p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.</p>
+<p>The software is provided "as is", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and noninfringement. In no event shall the
+authors or copyright holders be liable for any claim, damages or other
+liability, whether in an action of contract, tort or otherwise, arising from,
+out of or in connection with the software or the use or other dealings in
+the software.</p>
+
       </section>
       <footer>
         <p>This project is maintained by <a href="https://github.com/suurjaak">suurjaak</a></p>
