@@ -49,6 +49,6 @@ exe = EXE(
     debug=DO_DEBUG_VERSION, # Verbose or non-verbose debug statements printed
     strip=False,  # EXE and all shared libraries run through cygwin's strip, tends to render Win32 DLLs unusable
     upx=True,     # Using Ultimate Packer for eXecutables
-    icon=os.path.join(ROOTPATH, "res", "icons.ico"),
+    icon=os.path.join(ROOTPATH, "build", "nightfall.ico"),
     console=False # Use the Windows subsystem executable instead of the console one
 )

@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    11.09.2020
+@modified    12.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev32"
+Version = "2.0.dev33"
 
-VersionDate = "11.09.2020"
+VersionDate = "12.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -32,7 +32,7 @@ else:
     FullDirectory = os.path.dirname(os.path.abspath(__file__))
     ApplicationPath = os.path.join(FullDirectory, "%s.py" % Title.lower())
     ResourceDirectory = os.path.join(FullDirectory, "res")
-    ShortcutIconPath = os.path.join(ResourceDirectory, "icons.ico")
+    ShortcutIconPath = os.path.join(ResourceDirectory, "nightfall.ico")
 
 """List of attribute names that can be saved to and loaded from ConfigFile."""
 FileDirectives = [
