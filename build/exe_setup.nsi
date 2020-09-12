@@ -6,7 +6,7 @@
 ; /DSUFFIX64=<"_x64" for 64-bit installer>
 ;
 ; @created   18.10.2012
-; @modified  30.08.2020
+; @modified  12.09.2020
 
 Unicode True
 
@@ -56,7 +56,7 @@ Unicode True
 RequestExecutionLevel admin
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "nightfall_${PRODUCT_VERSION}_setup.exe"
+OutFile "nightfall_${PRODUCT_VERSION}${SUFFIX64}_setup.exe"
 InstallDir "$PROGRAMFILES\NightFall"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show
