@@ -4,7 +4,7 @@ Pyinstaller spec file for Skyperious, produces a 32-bit or 64-bit executable,
 depending on current environment.
 
 @created   18.10.2012
-@modified  03.09.2020
+@modified  12.09.2020
 """
 import os
 import struct
@@ -34,10 +34,8 @@ a = Analysis(
     excludes=["FixTk", "numpy", "tcl", "tk", "_tkinter", "tkinter", "Tkinter"],
 )
 # Add all image resources used by the script
-for i in ["blue.png", "brightness.png", "green.png", "icon.png", "icon_48x48.png",
-          "icons.ico", "listicon.png", "red.png", "tray_off.png",
-          "tray_off_scheduled.png", "tray_on.png", "tray_on_scheduled.png"]:
-	a.datas.append((os.path.join("res", i), os.path.join("res", i), "DATA"))
+for i in os.listdir("res"):
+    a.datas.append((os.path.join("res", i), os.path.join("res", i), "DATA"))
 
 pyz = PYZ(a.pure)
 
