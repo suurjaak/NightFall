@@ -1,36 +1,34 @@
 NightFall
-===========
+=========
 
-A small tray program for making screen colours darker and softer during
-late hours. Currently works under Windows, *might* work under Linux/OSX.
+A small tray program that can change screen brightness and colour gamma settings
+on schedule, in order to achieve a more natural feeling during late hours.
+
+Looking at a lit screen in a dark room can interfere with the sleep cycle,
+NightFall can provide a warm-coloured darker screen on desktop and laptop 
+computers alike.
+
+Comes with a number of pre-defined brightness and colour themes, you can
+also create and save your own themes.
 
 
 Using The Program
 -----------------
 
-NightFall will stay in the system tray as a grey or orange moon icon, depending
-on being active, and will dim the screen on command or according to hours
-scheduled in settings.
-
-
-Dependencies
-------------
-
-NightFall has been built in Python 2.7, using these 3rd-party Python packages:
-
-* wxPython 2.9 (http://wxpython.org/)
-* PyInstaller 2.0 (http://www.pyinstaller.org/)
+NightFall stays in the system tray as a grey or orange moon icon, depending on
+being active, dimming the screen on command or according to the set schedule.
+Schedule can be set in quarter-hour steps.
 
 
 Attribution
 -----------
 
-NightFall includes bits of code in gamma.py from PsychoPy 1.75
-(http://www.psychopy.org/epydoc/psychopy.gamma-pysrc.html), released under the
-compatible GNU General Public License v3; and from Windows Routines 2.2.1 by
-Jason R. Coombs,
-(http://pydoc.net/jaraco.windows/2.2.1/jaraco.windows.error), released under
-the MIT License.
+Built with Python (https://python.org) and wxPython (https://wxpython.org).
+
+Includes several icons from Fugue Icons,
+(c) 2010 Yusuke Kamiyamane, https://p.yusukekamiyamane.com.
+
+Windows binaries built with PyInstaller (https://www.pyinstaller.org).
 
 
 License
@@ -50,10 +48,10 @@ furnished to do so, subject to the following conditions:
 The above copyright notice and this permission notice shall be included in
 all copies or substantial portions of the Software.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+The software is provided "as is", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and noninfringement. In no event shall the
+authors or copyright holders be liable for any claim, damages or other
+liability, whether in an action of contract, tort or otherwise, arising from,
+out of or in connection with the software or the use or other dealings in
+the software.
