@@ -245,7 +245,7 @@ class Dimmer(object):
         if not changed or not self.should_dim(): return
 
         if enabled:
-            delay = datetime.timedelta(minutes=conf.SuspendIntervals[0])
+            delay = datetime.timedelta(minutes=conf.DefaultSuspendInterval)
             start = (datetime.datetime.now() + delay).replace(second=0, microsecond=0)
             msg, theme = "NORMAL DISPLAY", conf.NormalTheme
         else:
@@ -482,7 +482,6 @@ class NightFall(wx.App):
     def on_dimmer_event(self, event):
         """Handler for all events sent from Dimmer, updates UI state."""
         topic, data = event.Topic, event.Data
-        print topic, data # @todo remove
         if "THEME FAILED" == topic:
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
             ThemeImaging.Add(conf.ThemeName or self.unsaved_name(), theme)
@@ -1078,7 +1077,7 @@ class NightFall(wx.App):
             self.suspend_interval = None
         else:
             label, tooltip = conf.SuspendOffLabel, conf.SuspendOffToolTip
-            self.suspend_interval = conf.SuspendIntervals[0]
+            self.suspend_interval = conf.DefaultSuspendInterval
         self.skip_notification = bool(event and conf.SuspendedUntil)
         self.frame.button_suspend.Label   = label
         self.frame.button_suspend.ToolTip = tooltip

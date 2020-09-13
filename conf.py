@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev35"
+Version = "2.0.dev36"
 
 VersionDate = "13.09.2020"
 
@@ -40,9 +40,9 @@ FileDirectives = [
 ]
 """List of user-modifiable attributes, saved if changed from default."""
 OptionalFileDirectives = [
-    "FadeSteps", "ModifiedTemplate", "SuspendIntervals",
-    "ThemeBitmapSize", "ThemeNamedBitmapSize", "TimerInterval",
-    "UnsavedLabel", "UnsavedName", "UnsavedTheme",
+    "DefaultSuspendInterval", "FadeSteps", "ModifiedTemplate",
+    "SuspendIntervals", "ThemeBitmapSize", "ThemeNamedBitmapSize",
+    "TimerInterval", "UnsavedLabel", "UnsavedName", "UnsavedTheme",
     "WindowSlideInEnabled", "WindowSlideOutEnabled",
     "WindowSlideInStep", "WindowSlideOutStep",
     "WindowSlideDelay", "WindowTimeout",
@@ -189,17 +189,20 @@ Suspended until <a href="_"><font color="%(linkcolour)s">%(time)s</font></a>
 </font>"""
 
 """Minutes to postpone schedule by on suspending."""
-SuspendIntervals = [20, 30, 40, 60, 90, 120]
+SuspendIntervals = [10, 20, 30, 45, 60, 90, 120]
+
+"""Initial minutes to postpone schedule by on suspending."""
+DefaultSuspendInterval = 20
 
 """Activation label for suspend-button."""
 SuspendOnLabel = "\n".join(x.center(15) for x in 
-                           ("Suspend\nfor %s minutes" % SuspendIntervals[0]).split("\n"))
+                           ("Suspend", "for %s minutes" % DefaultSuspendInterval))
 
 """Deactivation label for suspend-button."""
 SuspendOffLabel = "Unsuspend"
 
 """Activation tooltip for suspend-button."""
-SuspendOnToolTip = "Delay applying theme for %s minutes" % SuspendIntervals[0]
+SuspendOnToolTip = "Delay applying theme for %s minutes" % DefaultSuspendInterval
 
 """Deactivation tooltip for suspend-button."""
 SuspendOffToolTip = "Apply theme immediately"
