@@ -1158,6 +1158,8 @@ class NightFall(wx.App):
         interval = conf.SuspendIntervals[dlg.GetSelection()]        
         if interval == self.suspend_interval: return
 
+        if not conf.SuspendedUntil: # Already unsuspended while dialog open
+            self.dimmer.toggle_suspend(True)
         self.suspend_interval = interval
         conf.SuspendedUntil = dt + datetime.timedelta(minutes=interval)
         args = {"graycolour": ColourManager.ColourHex(wx.SYS_COLOUR_GRAYTEXT),
