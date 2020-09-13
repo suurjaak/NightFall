@@ -935,7 +935,7 @@ class NightFall(wx.App):
         if self.frame.Shown \
         and not (event.Active or self.frame_hider or self.frame_shower):
             millis = conf.WindowTimeout * 1000
-            if millis: # Hide if timeout positive
+            if millis >= 0: # Hide if timeout positive
                 self.frame_hider = wx.CallLater(millis, self.settings_slidein)
         elif event.Active: # Kill the hiding timeout, if any
             if self.frame_hider:
@@ -951,6 +951,8 @@ class NightFall(wx.App):
         Slides the settings out of view into the screen edge, incrementally,
         using callbacks.
         """
+        if self.frame_has_modal: return
+
         y = self.frame.Position.y
         display_h = wx.GetDisplaySize().height
         if y < display_h:
