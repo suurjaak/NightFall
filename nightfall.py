@@ -869,7 +869,7 @@ class NightFall(wx.App):
         menu.Append(item)
         item.Check(conf.ScheduleEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_schedule, id=item.GetId())
-        if conf.ScheduleEnabled:
+        if self.dimmer.should_dim():
             if conf.SuspendedUntil:
                 menu_intervals = wx.Menu()
                 dt = conf.SuspendedUntil - datetime.timedelta(minutes=self.suspend_interval)
