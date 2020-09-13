@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev34"
+Version = "2.0.dev35"
 
 VersionDate = "13.09.2020"
 
@@ -91,7 +91,7 @@ TrayIcons = [TrayIconOff, TrayIconOffScheduled, TrayIconOn, TrayIconOnScheduled]
 TimerInterval = 10
 
 """Number of seconds before settings window is hidden on losing focus."""
-WindowTimeout = 30
+WindowTimeout = 60
 
 """Whether sliding the settings window in/out of view is enabled."""
 WindowSlideInEnabled = True
