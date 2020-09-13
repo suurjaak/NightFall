@@ -159,7 +159,7 @@ Schedule = []
 The default schedule, [1,0,..] per each quarter hour
 (21->06 on, 07->20 off).
 """
-DefaultSchedule = [1] * 6 * 4 + [0] * 15 * 4 + [1] * 3 * 4
+DefaultSchedule = [1] * 6 * 4 + [0] * 16 * 4 + [1] * 2 * 4
 
 """Datetime from which to apply theme."""
 SuspendedUntil = None
