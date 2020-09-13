@@ -272,7 +272,10 @@ class Dimmer(object):
             self.fade_target_theme = None
             self.fade_delta = self.fade_steps = self.fade_timer = None
             self.fade_current_theme = self.fade_original_theme = None
-        if conf.FadeSteps > 0 and fade and theme != self.current_theme:
+
+        if ThemeImaging.IsSupported(theme) == False:
+            result = False
+        elif conf.FadeSteps > 0 and fade and theme != self.current_theme:
             self.fade_steps = conf.FadeSteps
             self.fade_target_theme = theme[:]
             self.fade_current_theme = map(float, self.current_theme)
@@ -285,10 +288,11 @@ class Dimmer(object):
             result = gamma.set_screen_gamma(theme)
             self.current_theme = theme[:]
             ThemeImaging.MarkSupported(theme, result)
-            if not result:
-                self.post_event("THEME FAILED", theme)
-                # Unsupported theme: jump back to normal if not fading
-                if not self.fade_target_theme: self.apply_theme(conf.NormalTheme)
+
+        if not result:
+            self.post_event("THEME FAILED", theme)
+            # Unsupported theme: jump back to normal if not fading
+            if not self.fade_target_theme: self.apply_theme(conf.NormalTheme)
         return result
 
 
@@ -478,6 +482,7 @@ class NightFall(wx.App):
     def on_dimmer_event(self, event):
         """Handler for all events sent from Dimmer, updates UI state."""
         topic, data = event.Topic, event.Data
+        print topic, data # @todo remove
         if "THEME FAILED" == topic:
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
             ThemeImaging.Add(conf.ThemeName or self.unsaved_name(), theme)
