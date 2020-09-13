@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    11.09.2020
+@modified    13.09.2020
 """
 import collections
 import copy
@@ -254,8 +254,8 @@ class Dimmer(object):
             start, theme = None, conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
         conf.SuspendedUntil = start
         self.post_event("SUSPEND TOGGLED", enabled)
-        self.post_event(msg, theme)
         self.apply_theme(theme, fade=True)
+        self.post_event(msg, theme)
 
 
     def apply_theme(self, theme, fade=False):
@@ -410,6 +410,7 @@ class NightFall(wx.App):
         self.frame_has_modal   = False # Whether a modal dialog is open
         self.dt_tray_click     = None  # Last click timestamp, for detecting double-click
         self.suspend_interval  = None  # Currently selected suspend interval
+        self.skip_notification = False # Skip next tray notification message
         self.frame = frame = self.create_frame()
 
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
@@ -499,12 +500,14 @@ class NightFall(wx.App):
         elif "SCHEDULE IN EFFECT" == topic:
             dimming = not conf.SuspendedUntil
             self.set_tray_icon(self.TRAYICONS[dimming][True])
-            if not self.frame.Shown or self.frame.IsIconized():
+            if not self.skip_notification \
+            and (not self.frame.Shown or self.frame.IsIconized()):
                 n = conf.ThemeName or ""
                 m = "Schedule in effect%s." % ("" if not n else ': theme "%s"' % n)
                 m = wx.adv.NotificationMessage(title=conf.Title, message=m)
                 if self.trayicon.IsAvailable(): m.UseTaskBarIcon(self.trayicon)
                 m.Show()
+            self.skip_notification = False
             self.update_suspend()
         elif "SUSPEND TOGGLED" == topic:
             dimming = not conf.SuspendedUntil and self.dimmer.should_dim()
@@ -518,12 +521,13 @@ class NightFall(wx.App):
         elif "MANUAL IN EFFECT" == topic:
             dimming = not conf.SuspendedUntil
             self.set_tray_icon(self.TRAYICONS[dimming][conf.ScheduleEnabled])
+            self.skip_notification = False
             self.update_suspend()
         elif "NORMAL DISPLAY" == topic:
             self.set_tray_icon(self.TRAYICONS[False][conf.ScheduleEnabled])
+            self.skip_notification = False
             self.update_suspend()
-
-        if topic in ("THEME APPLIED", "THEME CHANGED"):
+        elif topic in ("THEME APPLIED", "THEME CHANGED"):
             if not conf.ThemeName and conf.UnsavedTheme and data == conf.UnsavedTheme:
                 ThemeImaging.Add(self.unsaved_name(), data)
                 tooltip = ThemeImaging.Repr(data)
@@ -778,7 +782,6 @@ class NightFall(wx.App):
         self.frame.button_restore.ContainingSizer.Layout()
 
         if self.dimmer.should_dim() and (conf.ThemeName or conf.UnsavedName) == name:
-            self.dimmer.toggle_suspend(False)
             self.dimmer.toggle_schedule(False)
             self.dimmer.toggle_manual(False)
 
@@ -832,8 +835,7 @@ class NightFall(wx.App):
 
         def on_apply_theme(name, theme, event):
             if not event.IsChecked(): return
-            if name == self.unsaved_name(): name = None
-            conf.ThemeName = name
+            conf.ThemeName = name if name != self.unsaved_name() else None
             conf.save()
             self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name))
             if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
@@ -886,7 +888,8 @@ class NightFall(wx.App):
 
         menu_themes = wx.Menu()
         items = sorted(conf.Themes.items(), key=lambda x: x[0].lower())
-        if conf.UnsavedTheme: items.insert(0, (self.unsaved_name(), ) * 2)
+        if conf.UnsavedTheme:
+            items.insert(0, (self.unsaved_name(), conf.UnsavedTheme))
         for name, theme in items:
             item = menu_themes.Append(-1, name.strip(), kind=wx.ITEM_CHECK)
             if is_dimming: item.Check(name == conf.ThemeName
@@ -1068,6 +1071,7 @@ class NightFall(wx.App):
         else:
             label, tooltip = conf.SuspendOffLabel, conf.SuspendOffToolTip
             self.suspend_interval = conf.SuspendIntervals[0]
+        self.skip_notification = bool(event and conf.SuspendedUntil)
         self.frame.button_suspend.Label   = label
         self.frame.button_suspend.ToolTip = tooltip
         self.frame.button_suspend.ContainingSizer.Layout()
@@ -1076,15 +1080,18 @@ class NightFall(wx.App):
 
     def on_toggle_manual(self, event):
         """Handler for toggling manual dimming on/off."""
+        self.skip_notification = self.dimmer.should_dim_scheduled() \
+                                 and not event.IsChecked()
         self.dimmer.toggle_manual(event.IsChecked())
 
 
-    def on_toggle_dimming_tray(self, event=None):
+    def on_toggle_dimming_tray(self, event):
         """
         Handler for toggling dimming on/off from the tray, can affect either
         schedule or global flag.
         """
         self.dt_tray_click = None
+        self.skip_notification = True
         do_dim = not self.dimmer.should_dim()
         if do_dim and self.dimmer.should_dim_scheduled(flag=True):
             self.dimmer.toggle_schedule(True)
@@ -1096,6 +1103,7 @@ class NightFall(wx.App):
 
     def on_toggle_schedule(self, event):
         """Handler for toggling schedule on/off."""
+        self.skip_notification = event.IsChecked()
         self.dimmer.toggle_schedule(event.IsChecked())
 
 
