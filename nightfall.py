@@ -77,7 +77,10 @@ class Dimmer(object):
 
         self.timer = wx.Timer()
         self.timer.Bind(wx.EVT_TIMER, self.on_timer, self.timer)
-        self.timer.Start(milliseconds=1000 * conf.TimerInterval)
+        # Ensure timer tick is immediately after start of minute
+        now = datetime.datetime.now()
+        delta = conf.TimerInterval - now.second % conf.TimerInterval + 1
+        wx.CallLater(1000 * delta, self.timer.Start, 1000 * conf.TimerInterval)
 
 
     def validate_conf(self):
@@ -1477,7 +1480,7 @@ class ClockSelector(wx.Panel):
     INTERVAL      = 30
     INTERVAL_TOOLTIP = 1
     RADIUS_CENTER = 20
-    ANGLE_START   = math.pi / 2 # In polar coordinates
+    ANGLE_START   = math.pi / 2 # 0-hour position, in radians from horizontal
 
     def __init__(self, parent, id=-1, pos=wx.DefaultPosition,
                  size=(400, 400), style=0, name=wx.PanelNameStr,
@@ -1520,6 +1523,9 @@ class ClockSelector(wx.Panel):
         self.Bind(wx.EVT_SYS_COLOUR_CHANGED, self.OnSysColourChange)
         self.timer = wx.Timer()
         self.timer.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
+        # Ensure timer tick is immediately after start of minute
+        delta = self.INTERVAL - datetime.datetime.now().second % self.INTERVAL + 1
+        wx.CallLater(1000 * delta, self.timer.Start, 1000 * self.INTERVAL)
         self.timer.Start(milliseconds=1000 * self.INTERVAL)
 
 
