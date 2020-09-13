@@ -1464,6 +1464,7 @@ class ClockSelector(wx.Panel):
     COLOUR_TIME   = wx.RED
     FONT_SIZE     = 8
     INTERVAL      = 30
+    INTERVAL_TOOLTIP = 1
     RADIUS_CENTER = 20
     ANGLE_START   = math.pi / 2 # In polar coordinates
 
@@ -1495,6 +1496,7 @@ class ClockSelector(wx.Panel):
         self.hourtexts     = None # ["00", ]
         self.hourtext_pts  = None # [(x, y), ]
         self.notch_pts     = None # [(x1, y1, x2, y2), ]
+        self.tooltip_timer = None # wx.CallLater for refreshing tooltip
         self.SetInitialSize(self.GetMinSize())
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
         self.AcceptsFocus = self.AcceptsFocusFromKeyboard = lambda: False
@@ -1506,11 +1508,12 @@ class ClockSelector(wx.Panel):
         self.Bind(wx.EVT_MOUSE_EVENTS, self.OnMouseEvent)
         self.Bind(wx.EVT_SYS_COLOUR_CHANGED, self.OnSysColourChange)
         self.timer = wx.Timer()
-        self.timer.Bind(wx.EVT_TIMER, self.on_timer, self.timer)
+        self.timer.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
         self.timer.Start(milliseconds=1000 * self.INTERVAL)
 
 
-    def on_timer(self, event):
+    def OnTimer(self, event):
+        if not self: return
         if self.USE_GC: self.InitBuffer()
         self.Refresh()
 
@@ -1520,6 +1523,24 @@ class ClockSelector(wx.Panel):
         event.Skip()
         if self.USE_GC: self.InitBuffer()
         self.Refresh()
+
+
+    def OnToolTip(self):
+        """Populates control tooltip with current selections."""
+        if not self: return
+        self.tooltip_timer = None
+        sections, start = [], None # sections=[(start, len), ]
+        for i, on in enumerate(self.selections):
+            if on and start is None: start = i # section start
+            elif not on and start is not None: # section end
+                sections.append((start, i - start))
+                start = None
+        if start is not None: # section reached the end
+            sections.append((start, i - start + 1))
+
+        f = lambda x: "%02d:%02d" % (x / 4, 15 * (x % 4))
+        tip = ", ".join("%s - %s" % (f(i), f(i + n)) for i, n in sections)
+        if not self.ToolTip or tip != self.ToolTip.Tip: self.ToolTip = tip
 
 
     def OnSize(self, event):
@@ -1675,7 +1696,7 @@ class ClockSelector(wx.Panel):
         gc.SetBrush(wx.Brush(self.BackgroundColour, wx.SOLID))
         gc.DrawRoundedRectangle(0, 0, width - 1, height - 1, 18)
 
-        # Draw and fill all selected sctors
+        # Draw and fill all selected sectors
         gc.SetPen(wx.Pen(ClockSelector.COLOUR_ON, style=wx.TRANSPARENT))
         gc.SetBrush(wx.Brush(ClockSelector.COLOUR_ON, wx.SOLID))
         for sect in (x for i, x in enumerate(self.sectors) if self.selections[i]):
@@ -1799,7 +1820,7 @@ class ClockSelector(wx.Panel):
                     unit = i
                     break # for i, sector
 
-        refresh = False
+        refresh, do_tooltip = False, False
         if event.LeftDown() or event.RightDown():
             self.CaptureMouse()
             if 0 <= unit < len(self.selections):
@@ -1895,11 +1916,18 @@ class ClockSelector(wx.Panel):
             if not self.HasCapture():
                 self.last_unit, self.sticky_value = None, None
                 self.penult_unit, self.dragback_unit = None, None
+        elif event.Moving() or event.Entering():
+            do_tooltip = True
         if refresh:
+            do_tooltip = True
             self.InitBuffer()
             self.Refresh()
             event = TimeSelectorEvent()
             wx.PostEvent(self.TopLevelParent.EventHandler, event)
+        if do_tooltip:
+            if self.tooltip_timer: self.tooltip_timer.Stop()
+            self.tooltip_timer = wx.CallLater(self.INTERVAL_TOOLTIP * 1000,
+                                              self.OnToolTip)
 
 
 
