@@ -285,7 +285,10 @@ class Dimmer(object):
             result = gamma.set_screen_gamma(theme)
             self.current_theme = theme[:]
             ThemeImaging.MarkSupported(theme, result)
-            if not result: self.post_event("THEME FAILED", theme)
+            if not result:
+                self.post_event("THEME FAILED", theme)
+                # Unsupported theme: jump back to normal if not fading
+                if not self.fade_target_theme: self.apply_theme(conf.NormalTheme)
         return result
 
 
