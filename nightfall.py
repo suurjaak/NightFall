@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    13.09.2020
+@modified    14.09.2020
 """
 import collections
 import copy
@@ -1513,14 +1513,14 @@ class ClockSelector(wx.Panel):
         self.tooltip_timer = None # wx.CallLater for refreshing tooltip
         self.SetInitialSize(self.GetMinSize())
         self.SetCursor(wx.Cursor(wx.CURSOR_HAND))
-        self.AcceptsFocus = self.AcceptsFocusFromKeyboard = lambda: False
         font = self.Font; font.SetPointSize(self.FONT_SIZE); self.Font = font
 
         self.Bind(wx.EVT_SIZE,  self.OnSize)
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_ERASE_BACKGROUND, self.OnEraseBackground)
-        self.Bind(wx.EVT_MOUSE_EVENTS, self.OnMouseEvent)
+        self.Bind(wx.EVT_MOUSE_EVENTS, self.OnMouse)
         self.Bind(wx.EVT_SYS_COLOUR_CHANGED, self.OnSysColourChange)
+        self.TopLevelParent.Bind(wx.EVT_MOUSEWHEEL, self.OnTopParentMouseWheel)
         self.timer = wx.Timer()
         self.timer.Bind(wx.EVT_TIMER, self.OnTimer, self.timer)
         # Ensure timer tick is immediately after start of minute
@@ -1806,7 +1806,21 @@ class ClockSelector(wx.Panel):
         dc.DrawBitmap(bmp, radius - stepx, radius - stepy)
 
 
-    def OnMouseEvent(self, event):
+    def OnTopParentMouseWheel(self, event):
+        """
+        Handler for mouse wheel in control top-level parent,
+        forwards event to this control if cursor inside control.
+        Workaround for win32 not sending wheel events to control unless
+        it's focused.
+        """
+        abspos = self.TopLevelParent.ClientToScreen(event.Position)
+        relpos = self.ScreenToClient(abspos)
+        if self.HitTest(relpos) == wx.HT_WINDOW_INSIDE:
+            event.Position = relpos
+            self.ProcessEvent(event)
+
+
+    def OnMouse(self, event):
         """Handler for any and all mouse actions in the control."""
         if not self.Enabled or not self.sectors: return
 
@@ -1824,7 +1838,6 @@ class ClockSelector(wx.Panel):
                     result = not result
                 x2, y2 = x1, y1
             return result
-
 
         center = [self.Size.width / 2] * 2
         unit, x, y = None, event.Position.x, event.Position.y
@@ -1935,6 +1948,19 @@ class ClockSelector(wx.Panel):
                 self.penult_unit, self.dragback_unit = None, None
         elif event.Moving() or event.Entering():
             do_tooltip = True
+        elif event.WheelRotation:
+            if unit is not None and 0 <= unit < len(self.selections):
+                grow = (event.WheelRotation > 0) ^ event.IsWheelInverted()
+                nextunit, ptr, i = unit, unit, 0
+                while self.selections[ptr]:
+                    nextunit, ptr = ptr, (ptr + 1) % len(self.selections)
+                    i += 1
+                    if i > len(self.selections): break # while
+                if grow and self.selections[nextunit]:
+                    nextunit = (nextunit + 1) % len(self.selections)
+                if self.selections[nextunit] ^ grow:
+                    refresh, self.selections[nextunit] = True, grow
+
         if refresh:
             do_tooltip = True
             self.InitBuffer()
