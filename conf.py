@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev40"
+Version = "2.0.dev41"
 
 VersionDate = "14.09.2020"
 
@@ -157,9 +157,9 @@ Schedule = []
 
 """
 The default schedule, [1,0,..] per each quarter hour
-(21->06 on, 07->20 off).
+(22->06 on, 07->21 off).
 """
-DefaultSchedule = [1] * 6 * 4 + [0] * 16 * 4 + [1] * 2 * 4
+DefaultSchedule = [1] * 7 * 4 + [0] * 15 * 4 + [1] * 2 * 4
 
 """Datetime from which to apply theme."""
 SuspendedUntil = None
