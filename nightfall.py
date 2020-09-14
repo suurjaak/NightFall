@@ -1184,10 +1184,10 @@ class NightFall(wx.App):
         sizer = panel.Sizer = wx.BoxSizer(wx.VERTICAL)
         sizer_checkboxes = wx.BoxSizer(wx.HORIZONTAL)
 
-        cb_manual = frame.cb_manual = wx.CheckBox(panel, label="Apply now")
-        cb_manual.ToolTip = "Apply colour theme regardless of schedule"
         cb_schedule = frame.cb_schedule = wx.CheckBox(panel, label="Apply on schedule")
         cb_schedule.ToolTip = "Apply automatically during the highlighted hours"
+        cb_manual = frame.cb_manual = wx.CheckBox(panel, label="Apply now")
+        cb_manual.ToolTip = "Apply colour theme regardless of schedule"
         sizer_checkboxes.Add(cb_schedule)
         sizer_checkboxes.AddStretchSpacer()
         sizer_checkboxes.Add(cb_manual)
