@@ -238,6 +238,8 @@ AboutHTMLTemplate = """
   </ul>
   </p>
 
+  %(nsis)s
+
   <p>
   Several icons from Fugue Icons, &copy; 2010 Yusuke Kamiyamane,
   <a href="https://p.yusukekamiyamane.com"><font color="%%(linkcolour)s">p.yusukekamiyamane.com</font></a>
@@ -245,7 +247,10 @@ AboutHTMLTemplate = """
 </font>
 """ % {"pyinstaller": '<li>PyInstaller, <a href="https://www.pyinstaller.org">'
                       '<font color="%(linkcolour)s">pyinstaller.org</font></a></li>'
-                      if getattr(sys, 'frozen', False) else ""}
+                      if getattr(sys, 'frozen', True) else "",
+       "nsis":        '<p>Installers created with Nullsoft Scriptable Install System, <a href="https://nsis.sourceforge.io">'
+                      '<font color="%(linkcolour)s">nsis.sourceforge.io</font></a></p>'
+                      if getattr(sys, 'frozen', True) else ""}
 
 
 def load():

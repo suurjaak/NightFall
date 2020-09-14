@@ -30,6 +30,9 @@ Includes several icons from Fugue Icons,
 
 Windows binaries built with PyInstaller (https://www.pyinstaller.org).
 
+Installers created with Nullsoft Scriptable Install System
+(https://nsis.sourceforge.io).
+
 
 License
 -------
