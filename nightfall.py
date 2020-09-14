@@ -1150,7 +1150,7 @@ class NightFall(wx.App):
 
     def on_change_suspend(self, event):
         """Handler for clicking time link in suspend label, opens interval choice dialog."""
-        dt = conf.SuspendedUntil - datetime.timedelta(minutes=self.suspend_interval)
+        dt = datetime.datetime.now()
         choices = ["%s minutes (until %s)" % 
                    (x, (dt + datetime.timedelta(minutes=x)).strftime("%H:%M"))
                    for x in conf.SuspendIntervals]
@@ -1161,8 +1161,6 @@ class NightFall(wx.App):
         if wx.ID_OK != resp: return
 
         interval = conf.SuspendIntervals[dlg.GetSelection()]        
-        if interval == self.suspend_interval: return
-
         dt2 = dt + datetime.timedelta(minutes=interval)
         if dt2 <= datetime.datetime.now(): # Selected date already past
             return self.dimmer.toggle_suspend(False)

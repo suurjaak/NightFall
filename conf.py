@@ -17,7 +17,7 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev39"
+Version = "2.0.dev40"
 
 VersionDate = "14.09.2020"
 
@@ -84,7 +84,7 @@ TrayIconOnScheduled = os.path.join(ResourceDirectory, "tray_on_scheduled.png")
 """Tray icon when theme is not applied and schedule is on."""
 TrayIconOffScheduled = os.path.join(ResourceDirectory, "tray_off_scheduled.png")
 
-"""List of all tray icons by state, [apploed now|schedule enabled]."""
+"""List of all tray icons by state, [applied now|schedule enabled]."""
 TrayIcons = [TrayIconOff, TrayIconOffScheduled, TrayIconOn, TrayIconOnScheduled]
 
 """Seconds between checking whether to apply/unapply schedule."""
