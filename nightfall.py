@@ -1104,8 +1104,10 @@ class NightFall(wx.App):
         """
         self.dt_tray_click = None
         self.skip_notification = True
-        do_dim = not self.dimmer.should_dim()
-        if do_dim and self.dimmer.should_dim_scheduled(flag=True):
+        do_dim = not self.dimmer.should_dim() or bool(conf.SuspendedUntil)
+        if do_dim and conf.SuspendedUntil:
+            self.dimmer.toggle_suspend(False)
+        elif do_dim and self.dimmer.should_dim_scheduled(flag=True):
             self.dimmer.toggle_schedule(True)
         elif not do_dim and self.dimmer.should_dim_scheduled():
             self.dimmer.toggle_manual(False)
