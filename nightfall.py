@@ -67,7 +67,7 @@ class Dimmer(object):
         conf.load()
         self.validate_conf()
 
-        self.current_theme = copy.copy(conf.NormalTheme) # Applied colour theme
+        self.current_theme = conf.NormalTheme # Applied colour theme
         self.fade_timer = None # wx.Timer instance for applying fading
         self.fade_steps = None # Number of steps to take during a fade
         self.fade_delta = None # Delta to add to theme components on fade step
@@ -478,7 +478,7 @@ class NightFall(wx.App):
         trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DOWN,   self.on_lclick_tray)
         trayicon.Bind(wx.adv.EVT_TASKBAR_RIGHT_DOWN,  self.on_open_tray_menu)
 
-        self.theme_original = copy.copy(conf.UnsavedTheme or conf.Themes.get(conf.UnsavedName))
+        self.theme_original = conf.UnsavedTheme or conf.Themes.get(conf.UnsavedName)
         self.populate(init=True)
         frame.notebook.SetSelection(1); frame.notebook.SetSelection(0) # Layout hack
         self.dimmer.start()
@@ -616,9 +616,9 @@ class NightFall(wx.App):
             conf.UnsavedTheme = None
 
         theme = conf.Themes.get(name, conf.UnsavedTheme)
-        self.theme_original = copy.copy(theme)
+        self.theme_original = theme
         conf.UnsavedName = name
-        conf.UnsavedTheme = None if name in conf.Themes else copy.copy(theme)
+        conf.UnsavedTheme = None if name in conf.Themes else theme
         if self.dimmer.should_dim():
             conf.ThemeName = name
             self.dimmer.toggle_suspend(False)
@@ -673,7 +673,7 @@ class NightFall(wx.App):
         ): return
 
         ThemeImaging.Remove(self.unsaved_name())
-        conf.Themes[name], self.theme_original = copy.copy(theme), copy.copy(theme)
+        conf.Themes[name] = self.theme_original = theme
         conf.UnsavedName, conf.UnsavedTheme = name, None
         if not conf.ThemeName: conf.ThemeName = name
         conf.save()
@@ -730,7 +730,7 @@ class NightFall(wx.App):
         if not conf.Themes and not conf.UnsavedTheme:
             # Deleted last theme and nothing being modified: add theme as unsaved
             conf.ThemeName, conf.UnsavedName = None, name
-            conf.UnsavedTheme, self.theme_original = copy.copy(theme), copy.copy(theme)
+            conf.UnsavedTheme = self.theme_original = theme
         conf.save()
         if was_current:
             self.dimmer.set_theme(conf.Themes.get(conf.ThemeName, conf.UnsavedTheme))
@@ -749,13 +749,12 @@ class NightFall(wx.App):
         menu = wx.Menu()
 
         def on_apply_theme(name, theme, event):
-            if not event.IsChecked(): return
             conf.ThemeName = name if name != self.unsaved_name() else None
-            conf.save()
-            self.frame.combo_themes.SetSelection(self.frame.combo_themes.FindItem(name))
             if not self.dimmer.should_dim(): self.dimmer.toggle_manual(True)
+            conf.save()
             self.dimmer.toggle_suspend(False)
             self.dimmer.set_theme(theme, fade=True)
+            self.populate()
 
         def on_suspend_interval(interval, event):
             if not event.IsChecked(): return self.on_toggle_suspend()
@@ -765,11 +764,10 @@ class NightFall(wx.App):
             self.populate_suspend()
 
 
-        is_dimming = self.dimmer.should_dim()
         item = wx.MenuItem(menu, -1, "Apply &now", kind=wx.ITEM_CHECK)
         item.Font = self.frame.Font.Bold()
         menu.Append(item)
-        item.Check(is_dimming and not self.dimmer.should_dim_scheduled())
+        item.Check(self.dimmer.should_dim() and not self.dimmer.should_dim_scheduled())
         menu.Bind(wx.EVT_MENU, self.on_toggle_manual, id=item.GetId())
 
         item = wx.MenuItem(menu, -1, "Apply on &schedule", kind=wx.ITEM_CHECK)
@@ -807,9 +805,8 @@ class NightFall(wx.App):
             items.insert(0, (self.unsaved_name(), conf.UnsavedTheme))
         for name, theme in items:
             item = menu_themes.Append(-1, name.strip(), kind=wx.ITEM_CHECK)
-            if is_dimming: item.Check(name == conf.ThemeName
-                                      or name == self.unsaved_name()
-                                         and not conf.ThemeName)
+            item.Check(name == conf.ThemeName or
+                       name == self.unsaved_name() and not conf.ThemeName)
             handler = functools.partial(on_apply_theme, name, theme)
             menu.Bind(wx.EVT_MENU, handler, id=item.GetId())
         menu.Append(-1, "Apply &theme", menu_themes)
@@ -982,12 +979,8 @@ class NightFall(wx.App):
 
     def on_toggle_suspend(self, event=None):
         """Handler for toggling schedule suspension on/off."""
-        if conf.SuspendedUntil:
-            label, tooltip = conf.SuspendOnLabel, conf.SuspendOnToolTip
-            self.suspend_interval = None
-        else:
-            label, tooltip = conf.SuspendOffLabel, conf.SuspendOffToolTip
-            self.suspend_interval = conf.DefaultSuspendInterval
+        self.suspend_interval = None if conf.SuspendedUntil else \
+                                conf.DefaultSuspendInterval
         self.skip_notification = bool(event and conf.SuspendedUntil)
         self.dimmer.toggle_suspend(conf.SuspendedUntil is None)
 
@@ -1662,7 +1655,7 @@ class ClockSelector(wx.Panel):
 
         # Draw hour texts
         gc.SetFont(gc.CreateFont(self.Font))
-        textwidth, textheight = self.GetTextExtent("02")
+        textwidth, _ = self.GetTextExtent("02")
         for i, text in enumerate(self.hourtexts):
             if width / 6 < 2.8 * textwidth and i % 2: continue # for i, text
             gc.DrawText(text, *self.hourtext_pts[i])
@@ -2295,7 +2288,7 @@ class ThemeImaging(object):
         """Registers or overwrites theme data, clears cached bitmap if changed."""
         if theme == cls._themes.get(name): return
 
-        cls._themes[name] = copy.copy(theme)
+        cls._themes[name] = theme
         cls._bitmaps.pop(name, None)
 
 
@@ -2335,7 +2328,7 @@ class ThemeImaging(object):
 
     @classmethod
     def IsSupported(cls, theme):
-        """Returns whether theme has been marked as supported or not, or None."""
+        """Returns False if theme has been marked as not supported, else None."""
         return cls._supported.get(tuple(theme))
 
 
@@ -2356,12 +2349,12 @@ class ThemeImaging(object):
 
     @classmethod
     def ClearCache(cls):
-        """Clears generated bitmap cache."""
+        """Clears all generated bitmaps."""
         cls._bitmaps.clear()
 
 
-    @classmethod
-    def MakeBitmap(cls, theme, supported=True, border=False, label=None):
+    @staticmethod
+    def MakeBitmap(theme, supported=True, border=False, label=None):
         """
         Returns a wx.Bitmap for the specified theme, with colour and brightness
         information as both text and visual.
