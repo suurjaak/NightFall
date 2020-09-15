@@ -21,7 +21,21 @@ Using The Program
 
 NightFall stays in the system tray as a grey or orange moon icon, depending on
 being active, dimming the screen on command or according to the set schedule.
+
 Schedule can be set in quarter-hour steps.
+Applied theme can be suspended for a selected number of minutes.
+
+Double-clicking the tray icon toggles current colour theme on or off;
+on by schedule if schedule covers current time but is currently disabled.
+Single-clicking the tray icon shows or hides the options window.
+Right-clicking the tray icon opens options menu.
+
+Left-clicking on time schedule toggles time period on, right-clicking off,
+same for clicking and dragging.
+Double-clicking on time schedule toggles an entire hour on or off.
+Scrolling the mouse wheel on time schedule grows or shrinks the current
+active section.
+
 
 Works under Windows, *might* work under Linux/OSX.
 
