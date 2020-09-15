@@ -3,7 +3,7 @@ Creates NightFall source distribution archive from current version.
 
 @author    Erki Suurjaak
 @created   12.09.2020
-@modified  12.09.2020
+@modified  15.09.2020
 """
 import glob
 import os
@@ -47,8 +47,7 @@ if "__main__" == __name__:
 
     with zipfile.ZipFile(os.path.join(INITIAL_DIR, DEST_FILE), mode="w") as zf:
         size = 0
-        for subdir, wildcard in [("res", "*"), ("build", "*"), (".", "*.py"),
-                                 (".", "nightfall.ini"), ]:
+        for subdir, wildcard in [("res", "*"), ("build", "*")]:
             entries = glob.glob(os.path.join(BASE_DIR, subdir, wildcard))
             files = sorted([os.path.basename(x) for x in entries
                           if os.path.isfile(x)], key=str.lower)
