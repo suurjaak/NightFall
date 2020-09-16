@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    15.09.2020
+@modified    16.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -17,9 +17,9 @@ import sys
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev42"
+Version = "2.0.dev43"
 
-VersionDate = "15.09.2020"
+VersionDate = "16.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -238,17 +238,17 @@ AboutHTMLTemplate = """
   </ul>
   </p>
 
-  %(nsis)s
-
   <p>
   Several icons from Fugue Icons, &copy; 2010 Yusuke Kamiyamane,
   <a href="https://p.yusukekamiyamane.com"><font color="%%(linkcolour)s">p.yusukekamiyamane.com</font></a>
   </p>
+
+  %(nsis)s
 </font>
 """ % {"pyinstaller": '<li>PyInstaller, <a href="https://www.pyinstaller.org">'
                       '<font color="%(linkcolour)s">pyinstaller.org</font></a></li>'
                       if getattr(sys, 'frozen', True) else "",
-       "nsis":        '<p>Installers created with Nullsoft Scriptable Install System, <a href="https://nsis.sourceforge.io">'
+       "nsis":        '<p>Installer from Nullsoft Scriptable Install System, <a href="https://nsis.sourceforge.io">'
                       '<font color="%(linkcolour)s">nsis.sourceforge.io</font></a></p>'
                       if getattr(sys, 'frozen', True) else ""}
 
