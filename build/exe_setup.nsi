@@ -182,5 +182,7 @@ Section Uninstall
   Call un.RefreshSysTray
 
   SetShellVarContext current
+  Delete "$LOCALAPPDATA\${PRODUCT_NAME}\${BASENAME}.ini"
+  RmDir  "$LOCALAPPDATA\${PRODUCT_NAME}"
   Delete "$SMSTARTUP\${PRODUCT_NAME}.lnk"
 SectionEnd

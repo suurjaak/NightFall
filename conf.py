@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    16.09.2020
+@modified    17.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -14,12 +14,15 @@ import json
 import os
 import sys
 
+try: import wx
+except Exception: pass
+
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev43"
+Version = "2.0.dev44"
 
-VersionDate = "16.09.2020"
+VersionDate = "17.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -257,6 +260,13 @@ def load():
     """Loads known directives from ConfigFile into this module's attributes."""
     global Defaults
 
+    configpaths = [ConfigFile]
+    if getattr(sys, 'frozen', False):
+        try:
+            p = wx.StandardPaths.Get().UserLocalDataDir
+            configpaths.append(os.path.join(p, "%s.ini" % Title.lower()))
+        except Exception: pass
+
     section = "*"
     module = sys.modules[__name__]
     Defaults.update({k: getattr(module, k) for k in FileDirectives + OptionalFileDirectives
@@ -265,7 +275,10 @@ def load():
     parser = RawConfigParser()
     parser.optionxform = str # Force case-sensitivity on names
     try:
-        parser.read(ConfigFile)
+        # Try user-specific path first, then path under application folder
+        for path in configpaths[::-1]:
+            if os.path.isfile(path) and parser.read(ConfigFile):
+                break # for path
 
         def parse_value(name):
             try: # parser.get can throw an error if value not found
@@ -286,13 +299,27 @@ def load():
 
 def save():
     """Saves directives into ConfigFile."""
+    configpaths = [ConfigFile]
+    if getattr(sys, 'frozen', False):
+        try:
+            p = wx.StandardPaths.Get().UserLocalDataDir
+            configpaths.append(os.path.join(p, "%s.ini" % Title.lower()))
+        except Exception: pass
+
     section = "*"
     module = sys.modules[__name__]
     parser = RawConfigParser()
     parser.optionxform = str # Force case-sensitivity on names
     parser.add_section(section)
     try:
-        f = open(ConfigFile, "wb")
+        for path in configpaths:
+            # Try path under application folder first, then user-specific path
+            try: os.makedirs(os.path.split(path)[0])
+            except Exception: pass
+            try: f = open(path, "wb")
+            except Exception: continue # for path
+            else: break # for path
+
 
         f.write("# %s %s configuration written on %s.\n" % (Title, Version,
                 datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
