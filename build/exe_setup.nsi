@@ -13,12 +13,13 @@ Unicode True
 !define PRODUCT_NAME "NightFall"
 !define PRODUCT_PUBLISHER "Erki Suurjaak"
 !define PRODUCT_WEB_SITE "https://suurjaak.github.io/NightFall"
-!define PROGEXE "nightfall.exe"
+!define BASENAME "nightfall"
+!define PROGEXE "${BASENAME}.exe"
 ; VERSION and SUFFIX64 *should* come from command-line parameter
 !define /ifndef VERSION "2.0"
 !define /ifndef SUFFIX64 ""
 
-!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\nightfall.exe"
+!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PROGEXE}"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 
 !define UNINSTALL_FILENAME "uninstall.exe"
@@ -51,7 +52,7 @@ Unicode True
 
 ; MUI Settings
 !define MUI_ABORTWARNING
-!define MUI_ICON "nightfall.ico"
+!define MUI_ICON "${BASENAME}.ico"
 !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
 
 ; Welcome page
@@ -63,6 +64,9 @@ Unicode True
 ; Instfiles page
 !insertmacro MUI_PAGE_INSTFILES
 ; Finish page
+!define MUI_PAGE_CUSTOMFUNCTION_PRE Startup_Pre
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW Startup_Show
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE Startup_Leave
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${PROGEXE}"
 !define MUI_FINISHPAGE_SHOWREADME "$INSTDIR\README.txt"
 !define MUI_FINISHPAGE_SHOWREADME_NOTCHECKED
@@ -77,13 +81,37 @@ Unicode True
 
 
 Name "${PRODUCT_NAME} ${VERSION}"
-OutFile "nightfall_${VERSION}${SUFFIX64}_setup.exe"
+OutFile "${BASENAME}_${VERSION}${SUFFIX64}_setup.exe"
 ShowInstDetails show
 ShowUnInstDetails show
 
 
 Function .OnInit
   !insertmacro MULTIUSER_INIT
+FunctionEnd
+
+Function Startup_Pre
+  ; Edit iospecial.ini at runtime before finish page appears, add startup checkbox
+  WriteINIStr "$PLUGINSDIR\iospecial.ini" "Settings" "NumFields" "6"
+  WriteINIStr "$PLUGINSDIR\iospecial.ini" "Field 6" "Type" "CheckBox"
+  WriteINIStr "$PLUGINSDIR\iospecial.ini" "Field 6" "Text" "Run &at startup"
+  WriteINIStr "$PLUGINSDIR\iospecial.ini" "Field 6" "Left" "120"
+  WriteINIStr "$PLUGINSDIR\iospecial.ini" "Field 6" "Right" "315"
+  WriteINIStr "$PLUGINSDIR\iospecial.ini" "Field 6" "Top" "130"
+  WriteINIStr "$PLUGINSDIR\iospecial.ini" "Field 6" "Bottom" "140"
+  WriteINIStr "$PLUGINSDIR\iospecial.ini" "Field 6" "State" "1"
+FunctionEnd
+
+Function Startup_Show
+  ReadINIStr $0 "$PLUGINSDIR\iospecial.ini" "Field 6" "HWND"
+  SetCtlColors $0 0x000000 0xFFFFFF
+FunctionEnd
+
+Function Startup_Leave
+  ReadINIStr $0 "$PLUGINSDIR\iospecial.ini" "Field 6" "State"
+  StrCmp $0 "0" +3
+  SetShellVarContext current
+  CreateShortCut "$SMSTARTUP\${PRODUCT_NAME}.lnk" "$INSTDIR\${PROGEXE}" "--start-minimized"
 FunctionEnd
 
 Function un.onInit
@@ -103,18 +131,18 @@ Section "MainSection" SEC01
   SetOverwrite ifnewer
   File "${PROGEXE}"
   SetOverwrite off
-  File "nightfall.ini"
+  File "${BASENAME}.ini"
   SetOverwrite ifnewer
   File "README.txt"
-  CreateDirectory "$SMPROGRAMS\NightFall"
-  CreateShortCut "$SMPROGRAMS\NightFall\NightFall.lnk" "$INSTDIR\${PROGEXE}"
-  CreateShortCut "$SMPROGRAMS\NightFall\README.lnk" "$INSTDIR\README.txt"
+  CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\${PROGEXE}"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\README.lnk" "$INSTDIR\README.txt"
 SectionEnd
 
 Section -AdditionalIcons
   WriteIniStr "$INSTDIR\${PRODUCT_NAME}.url" "InternetShortcut" "URL" "${PRODUCT_WEB_SITE}"
-  CreateShortCut "$SMPROGRAMS\NightFall\Website.lnk" "$INSTDIR\${PRODUCT_NAME}.url"
-  CreateShortCut "$SMPROGRAMS\NightFall\Uninstall NightFall.lnk" "$INSTDIR\${UNINSTALL_FILENAME}"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Website.lnk" "$INSTDIR\${PRODUCT_NAME}.url"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall ${PRODUCT_NAME}.lnk" "$INSTDIR\${UNINSTALL_FILENAME}"
 SectionEnd
 
 Section -Post
@@ -137,20 +165,22 @@ Section Uninstall
   Delete "$INSTDIR\${PRODUCT_NAME}.url"
   Delete "$INSTDIR\${UNINSTALL_FILENAME}"
   Delete "$INSTDIR\README.txt"
-  Delete "$INSTDIR\nightfall.ini"
+  Delete "$INSTDIR\${BASENAME}.ini"
+
+  Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
+  Delete "$SMPROGRAMS\${PRODUCT_NAME}\README.lnk"
+  Delete "$SMPROGRAMS\${PRODUCT_NAME}\Website.lnk"
+  Delete "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall ${PRODUCT_NAME}.lnk"
+  RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
+
   Delete "$INSTDIR\${PROGEXE}"
-
-  Delete "$SMPROGRAMS\NightFall\NightFall.lnk"
-  Delete "$SMPROGRAMS\NightFall\README.lnk"
-  Delete "$SMPROGRAMS\NightFall\Website.lnk"
-  Delete "$SMPROGRAMS\NightFall\Uninstall NightFall.lnk"
-  Delete "$SMPROGRAMS\Startup\NightFall.lnk"
-
-  RMDir "$SMPROGRAMS\NightFall"
   RMDir "$INSTDIR"
 
   DeleteRegKey SHCTX "${PRODUCT_UNINST_KEY}"
   DeleteRegKey SHCTX "${PRODUCT_DIR_REGKEY}"
   !insertmacro MULTIUSER_RegistryRemoveInstallInfo
   Call un.RefreshSysTray
+
+  SetShellVarContext current
+  Delete "$SMSTARTUP\${PRODUCT_NAME}.lnk"
 SectionEnd
