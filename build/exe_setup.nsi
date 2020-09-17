@@ -43,6 +43,8 @@ Unicode True
 !include NsisMultiUser.nsh
 !include NsisMultiUserLang.nsh
 !include MUI.nsh
+!include nsProcess.nsh
+!include RefreshSysTray.nsh
 !include x64.nsh
 
 !define MUI_TEXT_WELCOME_INFO_TEXT "This wizard will guide you through the installation of $(^NameDA).$\r$\n$\r$\n$_CLICK"
@@ -79,8 +81,20 @@ OutFile "nightfall_${VERSION}${SUFFIX64}_setup.exe"
 ShowInstDetails show
 ShowUnInstDetails show
 
+
 Function .OnInit
   !insertmacro MULTIUSER_INIT
+FunctionEnd
+
+Function un.onInit
+  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to uninstall $(^Name)?" IDYES +2
+  Abort
+  !insertmacro MULTIUSER_UNINIT
+FunctionEnd
+
+Function un.onUninstSuccess
+  HideWindow
+  MessageBox MB_ICONINFORMATION|MB_OK "$(^Name) was successfully removed from your computer."
 FunctionEnd
 
 
@@ -116,19 +130,10 @@ Section -Post
   WriteRegStr SHCTX "${PRODUCT_UNINST_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
 SectionEnd
 
-
-Function un.onInit
-  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to uninstall $(^Name)?" IDYES +2
-  Abort
-  !insertmacro MULTIUSER_UNINIT
-FunctionEnd
-
-Function un.onUninstSuccess
-  HideWindow
-  MessageBox MB_ICONINFORMATION|MB_OK "$(^Name) was successfully removed from your computer."
-FunctionEnd
-
 Section Uninstall
+  SetAutoClose true
+  ${nsProcess::KillProcess} "${PROGEXE}" $R4
+
   Delete "$INSTDIR\${PRODUCT_NAME}.url"
   Delete "$INSTDIR\${UNINSTALL_FILENAME}"
   Delete "$INSTDIR\README.txt"
@@ -147,5 +152,5 @@ Section Uninstall
   DeleteRegKey SHCTX "${PRODUCT_UNINST_KEY}"
   DeleteRegKey SHCTX "${PRODUCT_DIR_REGKEY}"
   !insertmacro MULTIUSER_RegistryRemoveInstallInfo
-  SetAutoClose true
+  Call un.RefreshSysTray
 SectionEnd
