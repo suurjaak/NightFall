@@ -4,7 +4,7 @@
 ::
 :: @author    Erki Suurjaak
 :: @created   21.08.2019
-:: @modified  30.08.2020
+:: @modified  17.09.2020
 @echo off
 :: Expand variables at execution time rather than at parse time
 setlocal EnableDelayedExpansion
@@ -42,7 +42,7 @@ set DESTFILE=%NAME%_%VERSION%%SUFFIX64%_setup.exe
 if exist "%DESTFILE%" echo Removing previous %DESTFILE%. & del "%DESTFILE%"
 if exist %NAME%.exe del %NAME%.exe
 copy /V "%EXEFILE%" %NAME%.exe > NUL 2>&1
-"%NSISDIR%\makensis.exe" /DPRODUCT_VERSION=%VERSION% /DSUFFIX64=%SUFFIX64% "%SETUPDIR%\exe_setup.nsi"
+"%NSISDIR%\makensis.exe" /DVERSION=%VERSION% /DSUFFIX64=%SUFFIX64% "%SETUPDIR%\exe_setup.nsi"
 del %NAME%.exe > NUL 2>&1
 if exist "%DESTFILE%" echo. & echo Successfully created %NAME% source distribution %DESTFILE%.
 move "%DESTFILE%" "%INITIAL_DIR%" > NUL 2>&1
