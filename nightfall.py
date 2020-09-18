@@ -689,8 +689,8 @@ class NightFall(wx.App):
 
         if self.dimmer.should_dim():
             name2 = conf.UnsavedName if conf.UnsavedName in conf.Themes else None
+            if not conf.ThemeName: conf.ThemeName = name2
             theme2 = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-            conf.ThemeName = name2
             self.dimmer.toggle_suspend(False)
             self.dimmer.apply_theme(theme2, fade=False)
         conf.save()
