@@ -20,7 +20,7 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev45"
+Version = "2.0.dev46"
 
 VersionDate = "18.09.2020"
 
@@ -244,10 +244,10 @@ AboutHTMLTemplate = """
 </font>
 """ % {"pyinstaller": '<li>PyInstaller, <a href="https://www.pyinstaller.org">'
                       '<font color="%(linkcolour)s">pyinstaller.org</font></a></li>'
-                      if getattr(sys, 'frozen', True) else "",
+                      if getattr(sys, 'frozen', False) else "",
        "nsis":        '<p>Installer from Nullsoft Scriptable Install System, <a href="https://nsis.sourceforge.io">'
                       '<font color="%(linkcolour)s">nsis.sourceforge.io</font></a></p>'
-                      if getattr(sys, 'frozen', True) else ""}
+                      if getattr(sys, 'frozen', False) else ""}
 
 
 def load():

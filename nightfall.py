@@ -484,6 +484,7 @@ class NightFall(wx.App):
         if conf.StartMinimizedParameter not in sys.argv:
             self.frame_move_ignore = True # Skip first move event on Show()
             frame.Show()
+        wx.CallAfter(lambda: frame and self.populate_suspend)
 
 
     def on_dimmer_event(self, event):
@@ -1140,19 +1141,17 @@ class NightFall(wx.App):
         ColourManager.Manage(label_suspend, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
         label_suspend.SetBorders(0)
         label_suspend.ToolTip = "Click on time to change interval"
-        label_suspend.Hide()
         frame.button_suspend = wx.Button(panel_config, label=conf.SuspendOnLabel)
         frame.button_suspend.ToolTip = conf.SuspendOnToolTip
         if "\n" in conf.SuspendOnLabel:
-            sz = (-1,  frame.button_suspend.CharHeight * 2 + 9) if "nt" == os.name else \
+            sz = ( -1, frame.button_suspend.CharHeight * 2 + 9) if "nt" == os.name else \
                  (140, frame.button_suspend.BestSize[1])
             frame.button_suspend.Size = frame.button_suspend.MinSize = sz
-        frame.button_suspend.Hide()
         panel_startup = frame.panel_startup = wx.Panel(panel_config)
-        frame.cb_startup = wx.CheckBox(panel_startup, label="Run at startup       ")
+        frame.cb_startup = wx.CheckBox(panel_startup, label="Run at startup")
         frame.cb_startup.ToolTip = "Add %s to startup programs" % conf.Title
 
-        sizer_middle.Add(selector_time, proportion=1, border=5, flag=wx.GROW | wx.ALL)
+        sizer_middle.Add(selector_time, proportion=2, border=5, flag=wx.GROW | wx.ALL)
         sizer_combo.Add(frame.label_combo)
         sizer_combo.Add(combo_themes)
         sizer_right.Add(sizer_combo, border=5,  flag=wx.LEFT | wx.ALIGN_RIGHT)
@@ -1163,7 +1162,7 @@ class NightFall(wx.App):
         panel_startup.Sizer = wx.BoxSizer(wx.VERTICAL)
         panel_startup.Sizer.Add(frame.cb_startup, border=5, flag=wx.LEFT)
         sizer_right.Add(panel_startup, border=5, flag=wx.TOP)
-        sizer_middle.Add(sizer_right, border=5, flag=wx.BOTTOM | wx.GROW)
+        sizer_middle.Add(sizer_right, proportion=1, border=5, flag=wx.BOTTOM | wx.GROW)
         panel_config.Sizer.Add(sizer_middle, proportion=1, border=5, flag=wx.GROW | wx.ALL)
 
 
