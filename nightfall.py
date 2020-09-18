@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    15.09.2020
+@modified    18.09.2020
 """
 import collections
 import copy
@@ -132,10 +132,9 @@ class Dimmer(object):
             if not is_var_valid(n): setattr(conf, n, conf.Defaults[n])
 
         if not isinstance(conf.Schedule, list) \
-        or len(conf.Schedule) != len(conf.DefaultSchedule):
-            conf.Schedule = conf.DefaultSchedule[:]
-        for i, g in enumerate(conf.Schedule):
-            if g not in [True, False]: conf.Schedule[i] = conf.DefaultSchedule[i]
+        or len(conf.Schedule) != len(conf.Defaults["Schedule"]) \
+        or any(g not in [True, False] for g in conf.Schedule):
+            conf.Schedule = conf.Defaults["Schedule"][:]
         conf.StartupEnabled = StartupService.is_started()
         conf.save()
 
