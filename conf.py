@@ -20,7 +20,7 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0.dev46"
+Version = "2.0"
 
 VersionDate = "18.09.2020"
 
@@ -125,7 +125,7 @@ ValidColourRange = (59, 255)
 ManualEnabled = False
 
 """Whether theme is applied automatically on schedule."""
-ScheduleEnabled = False
+ScheduleEnabled = True
 
 """Whether NightFall runs at computer startup."""
 StartupEnabled = False
