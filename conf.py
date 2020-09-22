@@ -20,7 +20,7 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.1.dev1"
+Version = "2.1.dev2"
 
 VersionDate = "22.09.2020"
 
@@ -315,8 +315,8 @@ def save():
             else: break # for path
 
 
-        f.write("# %s %s configuration written on %s.\n" % (Title, Version,
-                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        f.write("# %s configuration written on %s.\n" % 
+                (Title, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         for name in FileDirectives:
             try: parser.set(section, name, json.dumps(getattr(module, name)))
             except Exception: pass
