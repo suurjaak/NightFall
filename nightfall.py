@@ -715,8 +715,6 @@ class NightFall(wx.App):
         ThemeImaging.Remove(name)
         was_current = (conf.ThemeName == name)
 
-        if conf.UnsavedName == name and not conf.UnsavedTheme:
-            conf.UnsavedTheme = self.theme_original = theme
         if was_current:
             if self.dimmer.should_dim_scheduled():
                 self.dimmer.toggle_schedule(False)
@@ -726,6 +724,9 @@ class NightFall(wx.App):
             if conf.Themes:
                 items = sorted(conf.Themes, key=lambda x: x.lower())
                 conf.ThemeName = items[max(0, min(selected, len(items) - 1))]
+        if conf.ThemeName and conf.UnsavedName == name and not conf.UnsavedTheme:
+            conf.UnsavedName = conf.ThemeName
+            self.theme_original = conf.Themes.get(conf.ThemeName)
 
         if not conf.Themes and not conf.UnsavedTheme:
             # Deleted last theme and nothing being modified: add theme as unsaved
