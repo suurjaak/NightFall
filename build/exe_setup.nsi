@@ -109,15 +109,17 @@ FunctionEnd
 
 Function Startup_Leave
   ReadINIStr $0 "$PLUGINSDIR\iospecial.ini" "Field 6" "State"
-  StrCmp $0 "0" +3
+  StrCmp $0 "0" end
   SetShellVarContext current
   CreateShortCut "$SMSTARTUP\${PRODUCT_NAME}.lnk" "$INSTDIR\${PROGEXE}" "--start-minimized"
+  end:
 FunctionEnd
 
 Function un.onInit
-  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to uninstall $(^Name)?" IDYES +2
+  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to uninstall $(^Name)?" IDYES
   Abort
   !insertmacro MULTIUSER_UNINIT
+  end:
 FunctionEnd
 
 Function un.onUninstSuccess
