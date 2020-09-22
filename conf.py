@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    18.09.2020
+@modified    22.09.2020
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -20,9 +20,9 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.0"
+Version = "2.1.dev0"
 
-VersionDate = "18.09.2020"
+VersionDate = "22.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -186,7 +186,7 @@ Suspended until <a href="_"><font color="%(linkcolour)s">%(time)s</font></a>
 </font>"""
 
 """Minutes to postpone schedule by on suspending."""
-SuspendIntervals = [10, 20, 30, 45, 60, 90, 120]
+SuspendIntervals = [10, 20, 30, 45, 60, 90, 120, 180]
 
 """Initial minutes to postpone schedule by on suspending."""
 DefaultSuspendInterval = 20

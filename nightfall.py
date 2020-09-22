@@ -779,9 +779,13 @@ class NightFall(wx.App):
             if conf.SuspendedUntil:
                 menu_intervals = wx.Menu()
                 dt = conf.SuspendedUntil - datetime.timedelta(minutes=self.suspend_interval)
+                accels = set()
                 for x in conf.SuspendIntervals:
-                    label = "&%s minutes (until %s)" % \
-                            (x, (dt + datetime.timedelta(minutes=x)).strftime("%H:%M"))
+                    accel = next((str(x).replace(c, "&" + c, 1) for c in str(x)
+                                  if c not in accels), "&%s" % x)
+                    accels.add(accel[accel.index("&") + 1])
+                    label = "%s minutes (until %s)" % \
+                            (accel, (dt + datetime.timedelta(minutes=x)).strftime("%H:%M"))
                     item = menu_intervals.Append(-1, label, kind=wx.ITEM_CHECK)
                     item.Check(x == self.suspend_interval)
                     handler = functools.partial(on_suspend_interval, x)
