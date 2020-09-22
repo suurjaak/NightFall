@@ -15,6 +15,7 @@ import math
 import os
 import re
 import sys
+import urllib
 import warnings
 import webbrowser
 
@@ -2496,6 +2497,11 @@ def make_colour_bitmap(colour, size=(16, 16)):
 
 if __name__ == '__main__':
     warnings.simplefilter("ignore", UnicodeWarning)
-    app = NightFall(redirect=0) # stdout and stderr redirected to wx popup
+    singlename = urllib.quote_plus("%s-%s" % (conf.Title, conf.ApplicationFile))
+    singlechecker = wx.SingleInstanceChecker(singlename)
+    if singlechecker.IsAnotherRunning(): sys.exit()
+
+    app = NightFall(redirect=True) # stdout and stderr redirected to wx popup
     locale = wx.Locale(wx.LANGUAGE_ENGLISH) # Avoid dialog buttons in native language
     app.MainLoop()
+    del singlechecker

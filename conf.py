@@ -20,18 +20,20 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.1.dev2"
+Version = "2.1.dev3"
 
 VersionDate = "22.09.2020"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
     ApplicationDirectory = os.path.dirname(sys.executable) # likely relative
+    ApplicationFile = os.path.realpath(sys.executable)
     ApplicationPath = os.path.abspath(sys.executable)
     ShortcutIconPath = ApplicationPath
     ResourceDirectory = os.path.join(getattr(sys, "_MEIPASS", ""), "res")
 else:
     ApplicationDirectory = os.path.dirname(__file__) # likely relative
+    ApplicationFile = os.path.join(ApplicationDirectory, "main.py")
     FullDirectory = os.path.dirname(os.path.abspath(__file__))
     ApplicationPath = os.path.join(FullDirectory, "%s.py" % Title.lower())
     ResourceDirectory = os.path.join(FullDirectory, "res")
