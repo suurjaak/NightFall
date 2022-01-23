@@ -10,7 +10,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    04.09.2020
+@modified    23.01.2022
 ------------------------------------------------------------------------------
 """
 import ctypes
@@ -71,9 +71,9 @@ def get_screen_device():
             get_screen_device.device = ctypes.windll.user32.GetDC(0)
         elif "darwin" == sys.platform:
             count = ctypes.c_uint32()
-            carbon.CGGetActiveDisplayList(0, None, byref(count))
+            carbon.CGGetActiveDisplayList(0, None, ctypes.byref(count))
             displays = (ctypes.c_void_p * count.value)()
-            carbon.CGGetActiveDisplayList(count.value, displays, byref(count))
+            carbon.CGGetActiveDisplayList(count.value, displays, ctypes.byref(count))
             get_screen_device.device = displays[0]
         elif sys.platform.startswith("linux"):
             class Display(ctypes.Structure):
