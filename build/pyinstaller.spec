@@ -3,8 +3,13 @@
 Pyinstaller spec file for NightFall, produces a 32-bit or 64-bit executable,
 depending on current environment.
 
+------------------------------------------------------------------------------
+This file is part of NightFall - screen color dimmer for late hours.
+Released under the MIT License.
+
 @created   18.10.2012
 @modified  23.01.2022
+------------------------------------------------------------------------------
 """
 import os
 import struct

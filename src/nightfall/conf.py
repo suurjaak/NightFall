@@ -4,9 +4,14 @@ Application settings, and functionality to save/load some of them from
 an external file. Configuration file has simple INI file format,
 and all values are kept in JSON.
 
+------------------------------------------------------------------------------
+This file is part of NightFall - screen color dimmer for late hours.
+Released under the MIT License.
+
 @author      Erki Suurjaak
 @created     15.10.2012
 @modified    23.02.2022
+------------------------------------------------------------------------------
 """
 from ConfigParser import RawConfigParser
 import datetime

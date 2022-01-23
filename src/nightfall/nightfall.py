@@ -3,9 +3,14 @@
 A tray application that can make screen colors darker and softer during
 nocturnal hours, can activate on schedule.
 
+------------------------------------------------------------------------------
+This file is part of NightFall - screen color dimmer for late hours.
+Released under the MIT License.
+
 @author      Erki Suurjaak
 @created     15.10.2012
 @modified    23.01.2022
+------------------------------------------------------------------------------
 """
 import collections
 import copy

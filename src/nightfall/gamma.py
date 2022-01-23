@@ -4,9 +4,14 @@ Functionality for handling screen device gamma ramps.
 
 Accessing gamma ramp functionality on the basis of PsychoPy 1.75 by Jonathan Peirce.
 
+------------------------------------------------------------------------------
+This file is part of NightFall - screen color dimmer for late hours.
+Released under the MIT License.
+
 @author      Erki Suurjaak
 @created     15.10.2012
 @modified    04.09.2020
+------------------------------------------------------------------------------
 """
 import ctypes
 import ctypes.util
