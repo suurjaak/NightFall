@@ -5,7 +5,7 @@ nocturnal hours, can activate on schedule.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    18.09.2020
+@modified    23.01.2022
 """
 import collections
 import copy
@@ -15,8 +15,6 @@ import math
 import os
 import re
 import sys
-import urllib
-import warnings
 import webbrowser
 
 import wx
@@ -31,8 +29,8 @@ import wx.lib.agw.ultimatelistctrl
 import wx.lib.newevent
 import wx.py
 
-import conf
-import gamma
+from . import conf
+from . import gamma
 
 """Event class and event binder for events in Dimmer."""
 DimmerEvent, EVT_DIMMER = wx.lib.newevent.NewEvent()
@@ -2263,11 +2261,11 @@ class StartupService(object):
             import win32com.client
             shell = win32com.client.Dispatch("WScript.Shell")
             shortcut = shell.CreateShortCut(path)
-            if target.lower().endswith(("py", "pyw")):
+            if not target.lower().endswith(("exe", "bat", "cmd")):
                 # pythonw leaves no DOS window open
                 python = sys.executable.replace("python.exe", "pythonw.exe")
                 shortcut.Targetpath = '"%s"' % python
-                shortcut.Arguments = '"%s" %s' % (target, conf.StartMinimizedParameter)
+                shortcut.Arguments = "-m %s %s" % (target, conf.StartMinimizedParameter)
             else:
                 shortcut.Targetpath = target
                 shortcut.Arguments = conf.StartMinimizedParameter
@@ -2492,16 +2490,3 @@ def make_colour_bitmap(colour, size=(16, 16)):
     del dc
     bmp.SetMaskColour(wx.TRANSPARENT_PEN.Colour)
     return bmp
-
-
-
-if __name__ == '__main__':
-    warnings.simplefilter("ignore", UnicodeWarning)
-    singlename = urllib.quote_plus("%s-%s" % (conf.Title, conf.ApplicationFile))
-    singlechecker = wx.SingleInstanceChecker(singlename)
-    if singlechecker.IsAnotherRunning(): sys.exit()
-
-    app = NightFall(redirect=True) # stdout and stderr redirected to wx popup
-    locale = wx.Locale(wx.LANGUAGE_ENGLISH) # Avoid dialog buttons in native language
-    app.MainLoop()
-    del singlechecker

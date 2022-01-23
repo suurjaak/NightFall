@@ -6,7 +6,7 @@ and all values are kept in JSON.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    22.09.2020
+@modified    23.02.2022
 """
 from ConfigParser import RawConfigParser
 import datetime
@@ -20,9 +20,9 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.1"
+Version = "2.2.dev0"
 
-VersionDate = "22.09.2020"
+VersionDate = "23.01.2022"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -31,13 +31,14 @@ if getattr(sys, 'frozen', False):
     ApplicationPath = os.path.abspath(sys.executable)
     ShortcutIconPath = ApplicationPath
     ResourceDirectory = os.path.join(getattr(sys, "_MEIPASS", ""), "res")
+    EtcDirectory = ApplicationDirectory
 else:
-    ApplicationDirectory = os.path.dirname(__file__) # likely relative
-    ApplicationFile = os.path.join(ApplicationDirectory, "main.py")
-    FullDirectory = os.path.dirname(os.path.abspath(__file__))
-    ApplicationPath = os.path.join(FullDirectory, "%s.py" % Title.lower())
-    ResourceDirectory = os.path.join(FullDirectory, "res")
+    ApplicationDirectory = os.path.abspath(os.path.join(__file__, "..", ".."))
+    ApplicationFile = os.path.join(ApplicationDirectory, Title.lower(), "main.py")
+    ApplicationPath = "%s" % Title.lower()
+    ResourceDirectory = os.path.abspath(os.path.join(ApplicationDirectory, "..", "res"))
     ShortcutIconPath = os.path.join(ResourceDirectory, "nightfall.ico")
+    EtcDirectory = os.path.join(os.path.abspath(os.path.dirname(__file__)), "etc")
 
 """List of attribute names that can be saved to and loaded from ConfigFile."""
 FileDirectives = [
@@ -55,7 +56,7 @@ OptionalFileDirectives = [
 Defaults = {}
 
 """Name of file where FileDirectives are kept."""
-ConfigFile = "%s.ini" % os.path.join(ApplicationDirectory, Title.lower())
+ConfigFile = "%s.ini" % os.path.join(EtcDirectory, Title.lower())
 
 """Settings window size in pixels, (w, h)."""
 WindowSize = (400, 380)

@@ -42,7 +42,8 @@ Works under Windows, *might* work under Linux/OSX.
 If launching the program manually, `--start-minimized` command-line option
 will auto-hide the settings window initially.
 
-Run `python nightfall.py` if using the source distribution.
+If using the source distribution, open a terminal to src-directory,
+and run `python -m nightfall`.
 
 
 Dependencies
