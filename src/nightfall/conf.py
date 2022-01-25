@@ -10,10 +10,11 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    23.02.2022
+@modified    25.01.2022
 ------------------------------------------------------------------------------
 """
-from ConfigParser import RawConfigParser
+try: import ConfigParser as configparser # Py2
+except ImportError: import configparser  # Py3
 import datetime
 import json
 import os
@@ -25,9 +26,9 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.2.dev0"
+Version = "2.2.dev1"
 
-VersionDate = "23.01.2022"
+VersionDate = "25.01.2022"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -274,7 +275,7 @@ def load():
     Defaults.update({k: getattr(module, k) for k in FileDirectives + OptionalFileDirectives
                      if hasattr(module, k)}) if not Defaults else None
 
-    parser = RawConfigParser()
+    parser = configparser.RawConfigParser()
     parser.optionxform = str # Force case-sensitivity on names
     try:
         # Try user-specific path first, then path under application folder
@@ -310,7 +311,7 @@ def save():
 
     section = "*"
     module = sys.modules[__name__]
-    parser = RawConfigParser()
+    parser = configparser.RawConfigParser()
     parser.optionxform = str # Force case-sensitivity on names
     parser.add_section(section)
     try:

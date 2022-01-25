@@ -29,6 +29,5 @@ def run():
     if singlechecker.IsAnotherRunning(): sys.exit()
 
     app = NightFall(redirect=True) # stdout and stderr redirected to wx popup
-    mylocale = wx.Locale(wx.LANGUAGE_ENGLISH) # Avoid dialog buttons in native language
     app.MainLoop()
     del singlechecker

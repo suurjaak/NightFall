@@ -9,7 +9,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    23.01.2022
+@modified    25.01.2022
 ------------------------------------------------------------------------------
 """
 import collections
@@ -33,6 +33,8 @@ import wx.lib.agw.thumbnailctrl
 import wx.lib.agw.ultimatelistctrl
 import wx.lib.newevent
 import wx.py
+try: import wx.lib.agw.scrolledthumbnail as thumbnailevents             # Py3
+except ImportError: import wx.lib.agw.thumbnailctrl as thumbnailevents  # Py2
 
 from . import conf
 from . import gamma
@@ -105,7 +107,7 @@ class Dimmer(object):
                     and all(isinstance(a, type(b)) for a, b in zip(v, v0))) \
                    if isinstance(v, (list, tuple)) and isinstance(v0, (list, tuple)) \
                    else (isinstance(v, type(v0))
-                         or isinstance(v, basestring) and isinstance(v0, basestring))
+                         or isinstance(v, text_types) and isinstance(v0, text_types))
 
         if not is_theme_valid(conf.UnsavedTheme):
             conf.UnsavedTheme = None
@@ -289,7 +291,7 @@ class Dimmer(object):
         elif conf.FadeSteps > 0 and fade and theme != self.current_theme:
             self.fade_steps = conf.FadeSteps
             self.fade_target_theme = theme[:]
-            self.fade_current_theme = map(float, self.current_theme)
+            self.fade_current_theme = list(map(float, self.current_theme))
             self.fade_original_theme = self.current_theme[:]
             self.fade_delta = []
             for new, now in zip(theme, self.current_theme):
@@ -370,7 +372,7 @@ class Dimmer(object):
             t = datetime.datetime.now().time()
             H_MUL = len(conf.Schedule) / 24
             M_DIV = 60 / H_MUL
-            result = bool(conf.Schedule[t.hour * H_MUL + t.minute / M_DIV])
+            result = bool(conf.Schedule[int(t.hour * H_MUL + t.minute / M_DIV)])
         return result
 
 
@@ -389,7 +391,7 @@ class Dimmer(object):
             # Final step: use exact given target, to avoid rounding errors
             current_theme = self.fade_target_theme
         else:
-            current_theme = map(int, map(round, self.fade_current_theme))
+            current_theme = list(map(int, map(round, self.fade_current_theme)))
         success = self.apply_theme(current_theme)
         if success:
             msg = "THEME STEPPED" if self.fade_steps else "THEME APPLIED"
@@ -433,9 +435,9 @@ class NightFall(wx.App):
         self.frame = frame = self.create_frame()
 
         frame.Bind(wx.EVT_CHECKBOX, self.on_toggle_schedule, frame.cb_schedule)
-        frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
+        frame.Bind(thumbnailevents.EVT_THUMBNAILS_SEL_CHANGED,
             self.on_select_list_themes, frame.list_themes)
-        frame.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_DCLICK,
+        frame.Bind(thumbnailevents.EVT_THUMBNAILS_DCLICK,
             self.on_apply_list_themes, frame.list_themes)
         frame.Bind(wx.EVT_LIST_DELETE_ITEM, self.on_delete_theme, frame.list_themes)
 
@@ -473,7 +475,7 @@ class NightFall(wx.App):
         self.TRAYICONS = {False: {}, True: {}}
         # Cache tray icons in dicts [dimming now][schedule enabled]
         for i, f in enumerate(conf.TrayIcons):
-            dim, sch = False if i < 2 else True, True if i % 2 else False
+            dim, sch = (False if i < 2 else True), (True if i % 2 else False)
             self.TRAYICONS[dim][sch] = wx.Icon(wx.Bitmap(f))
         trayicon = self.trayicon = wx.adv.TaskBarIcon()
         self.set_tray_icon(self.TRAYICONS[False][False])
@@ -489,6 +491,15 @@ class NightFall(wx.App):
             self.frame_move_ignore = True # Skip first move event on Show()
             frame.Show()
         wx.CallAfter(lambda: frame and self.populate_suspend)
+
+
+    def InitLocale(self):
+        """Override wx.App.InitLocale() to avoid dialogs in native language."""
+        self.ResetLocale()
+        if "win32" == sys.platform:  # Avoid dialog buttons in native language
+            mylocale = wx.Locale(wx.LANGUAGE_ENGLISH_US, wx.LOCALE_LOAD_DEFAULT)
+            mylocale.AddCatalog("wxstd")
+            self._initial_locale = mylocale  # Override wx.App._initial_locale
 
 
     def on_dimmer_event(self, event):
@@ -557,6 +568,7 @@ class NightFall(wx.App):
         """Returns current unsaved name for display, as "name *" or " (unsaved) "."""
         if conf.UnsavedName:  return conf.ModifiedTemplate % conf.UnsavedName
         if conf.UnsavedTheme: return conf.UnsavedLabel
+        return None
 
 
     def set_tray_icon(self, icon):
@@ -599,9 +611,7 @@ class NightFall(wx.App):
 
     def on_select_combo_editor(self, event):
         """Handler for selecting an item in editor combobox."""
-
-        cmb, cmb2 = self.frame.combo_themes, self.frame.combo_editor
-        name = cmb2.GetItemValue(event.Selection)
+        name = self.frame.combo_editor.GetItemValue(event.Selection)
         if conf.UnsavedTheme and not event.Selection: name = conf.UnsavedName
 
         if event.Selection and conf.UnsavedTheme \
@@ -762,7 +772,9 @@ class NightFall(wx.App):
             self.populate()
 
         def on_suspend_interval(interval, event):
-            if not event.IsChecked(): return self.on_toggle_suspend()
+            if not event.IsChecked():
+                self.on_toggle_suspend()
+                return
 
             self.suspend_interval = interval
             conf.SuspendedUntil = dt + datetime.timedelta(minutes=interval)
@@ -799,7 +811,7 @@ class NightFall(wx.App):
                 menu.Append(-1, label.replace("u", "&u", 1), menu_intervals)
             else:
                 label = conf.SuspendOnLabel.strip().replace("u", "&u", 1)
-                label = re.sub("\s+", " ", label)
+                label = re.sub(r"\s+", " ", label)
                 item = menu.Append(-1, label, kind=wx.ITEM_CHECK)
                 item.Check(bool(conf.SuspendedUntil))
                 menu.Bind(wx.EVT_MENU, self.on_toggle_suspend, id=item.GetId())
@@ -1069,7 +1081,8 @@ class NightFall(wx.App):
         interval = conf.SuspendIntervals[dlg.GetSelection()]        
         dt2 = dt + datetime.timedelta(minutes=interval)
         if dt2 <= datetime.datetime.now(): # Selected date already past
-            return self.dimmer.toggle_suspend(False)
+            self.dimmer.toggle_suspend(False)
+            return
 
         if not conf.SuspendedUntil: # Already unsuspended while dialog open
             self.dimmer.toggle_suspend(True)
@@ -1217,7 +1230,7 @@ class NightFall(wx.App):
         for i, text in enumerate(["brightness", "red", "green", "blue"]):
             if i: bmp1, bmp2 = [make_colour_bitmap(wx.Colour(**dict(kws, **{text: x})))
                                 for x in conf.ValidColourRange]
-            else: bmp1, bmp2 = map(wx.Bitmap,         conf.BrightnessIcons)
+            else: bmp1, bmp2 = map(wx.Bitmap, conf.BrightnessIcons)
             sbmp1 = wx.StaticBitmap(panel_editor, bitmap=bmp1)
             sbmp2 = wx.StaticBitmap(panel_editor, bitmap=bmp2)
             slider = wx.Slider(panel_editor, size=(-1, 20),
@@ -1480,7 +1493,7 @@ class ClockSelector(wx.Panel):
         """Populates control tooltip with current selections."""
         if not self: return
         self.tooltip_timer = None
-        sections, start = [], None # sections=[(start, len), ]
+        sections, start, i = [], None, 0 # sections=[(start, len), ]
         for i, on in enumerate(self.selections):
             if on and start is None: start = i # section start
             elif not on and start is not None: # section end
@@ -1706,7 +1719,6 @@ class ClockSelector(wx.Panel):
         gc.DrawRoundedRectangle(0, 0, width - 1, height - 1, 18)
 
 
-
     def DrawDC(self, dc):
         """Draws the custom selector control using a DC."""
         width, height = self.Size
@@ -1764,8 +1776,8 @@ class ClockSelector(wx.Panel):
             result = False 
             if len(polypoints) < 3 or len(point) < 2: return result
 
-            polygon = [map(float, p) for p in polypoints]
-            (x, y), (x2, y2) = map(float, point), polygon[-1]
+            polygon = [list(map(float, p)) for p in polypoints]
+            (x, y), (x2, y2) = list(map(float, point)), polygon[-1]
             for x1, y1 in polygon:
                 if (y1 <= y and y < y2 or y2 <= y and y < y1) \
                 and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
@@ -1921,7 +1933,7 @@ class BitmapComboBox(wx.adv.OwnerDrawnComboBox):
         @param   selected  index of selected choice, if any
         """
         super(BitmapComboBox, self).__init__(parent, id=id, pos=pos,
-            size=size, choices=choices, style=style | wx.CB_READONLY, name=name)
+              size=size, choices=choices, style=style | wx.CB_READONLY, name=name)
 
         self._imagehandler = imagehandler()
         self._items = list(choices)
@@ -2028,18 +2040,16 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
 
         self._scrolled.Bind(wx.EVT_CHAR_HOOK, self._OnChar)
         self._scrolled.Bind(wx.EVT_MOUSEWHEEL, None) # Disable zoom
-        self._scrolled.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_SEL_CHANGED,
-                            self._OnSelectionChanged)
-        self._scrolled.Bind(wx.lib.agw.thumbnailctrl.EVT_THUMBNAILS_DCLICK,
-                            self._OnDoubleClick)
+        self._scrolled.Bind(thumbnailevents.EVT_THUMBNAILS_SEL_CHANGED, self._OnSelectionChanged)
+        self._scrolled.Bind(thumbnailevents.EVT_THUMBNAILS_DCLICK,      self._OnDoubleClick)
         ColourManager.Manage(self._scrolled, "BackgroundColour", wx.SYS_COLOUR_WINDOW)
 
 
     def GetItemValue(self, index):
         """Returns item value at specified index."""
-        if not (0 <= index < self.GetItemCount()): return
+        if not (0 <= index < self.GetItemCount()): return None
         thumb = self.GetItem(index)
-        if thumb: return thumb.GetFileName()
+        return thumb.GetFileName() if thumb else None
 
 
     def GetValue(self):
@@ -2060,8 +2070,17 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
 
     def SetItems(self, items):
         """Populates the control with string items."""
-        self.ShowThumbs([wx.lib.agw.thumbnailctrl.Thumb(self, folder="", filename=x,
-                         caption=x) for x in items], caption="")
+        def make_args(item):
+            """Returns keyword arguments for wx.lib.agw.thumbnailctrl.Thumb()."""
+            kwargs = dict(folder="", filename=item, caption=item)
+            if sys.version_info >= (3, ):
+                kwargs.update(imagehandler=ThemeImaging)
+            else:
+                kwargs.update(parent=self)
+            return kwargs
+        args = ([wx.lib.agw.thumbnailctrl.Thumb(**make_args(x)) for x in items], )
+        if sys.version_info < (3, ): args += ("", )  # caption=""
+        self.ShowThumbs(*args)
 
 
     def SetToolTipFunction(self, get_info):
@@ -2072,12 +2091,14 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
     def _GetThumbInfo(self, index):
         """Returns the thumbnail information for the specified index."""
         thumb = self.GetItem(index)
-        if thumb and self._get_info: return self._get_info(thumb.GetFileName())
+        return self._get_info(thumb.GetFileName()) if thumb and self._get_info else None
 
 
     def _OnChar(self, event):
         """Handler for keypress, allows navigation, activation and deletion."""
-        if not self.GetItemCount(): return event.Skip()
+        if not self.GetItemCount():
+            event.Skip()
+            return
 
         selection = self.GetSelection()
         if event.KeyCode in KEYS.ENTER:
@@ -2135,8 +2156,7 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
         event.Skip()
         # Disable ThumbnailCtrl's multiple selection
         self._scrolled._selectedarray[:] = [self.GetSelection()]
-        evt = wx.lib.agw.thumbnailctrl.ThumbnailEvent(
-            wx.lib.agw.thumbnailctrl.wxEVT_THUMBNAILS_SEL_CHANGED, self.Id)
+        evt = thumbnailevents.ThumbnailEvent(thumbnailevents.wxEVT_THUMBNAILS_SEL_CHANGED, self.Id)
         evt.SetEventObject(self)
         evt.Selection = self.GetSelection()
         wx.PostEvent(self, evt)
@@ -2145,8 +2165,7 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
     def _OnDoubleClick(self, event=None):
         """Handler for double-clicking item, fires EVT_THUMBNAILS_DCLICK."""
         if event: event.Skip()
-        evt = wx.lib.agw.thumbnailctrl.ThumbnailEvent(
-            wx.lib.agw.thumbnailctrl.wxEVT_THUMBNAILS_DCLICK, self.Id)
+        evt = thumbnailevents.ThumbnailEvent(thumbnailevents.wxEVT_THUMBNAILS_DCLICK, self.Id)
         evt.SetEventObject(self)
         wx.PostEvent(self, evt)
 
@@ -2196,7 +2215,7 @@ class ColourManager(object):
     def GetColour(cls, colour):
         """Returns wx.Colour, from string or [r, g, b] or wx.SYS_COLOUR_XYZ."""
         if isinstance(colour, wx.Colour): return colour
-        return wx.Colour(colour)  if isinstance(colour, basestring)    else \
+        return wx.Colour(colour)  if isinstance(colour, text_types)    else \
                wx.Colour(*colour) if isinstance(colour, (list, tuple)) else \
                wx.SystemSettings.GetColour(colour)
 
@@ -2435,7 +2454,7 @@ class ThemeImaging(object):
         return bmp
 
 
-    def LoadThumbnail(self, filename, thumbnailsize=None):
+    def Load(self, filename, thumbnailsize=None):
         """Hook for ThumbnailCtrl, returns (wx.Image, (w, h), hasAlpha)."""
         name = os.path.basename(filename) # ThumbnailCtrl gives absolute paths
         if name not in self._themes: return wx.NullImage, (0, 0), False
@@ -2446,6 +2465,11 @@ class ThemeImaging(object):
         return img, img.GetSize(), img.HasAlpha()
 
 
+    def LoadThumbnail(self, filename, thumbnailsize=None):
+        """Hook for ThumbnailCtrl, returns (wx.Image, (w, h), hasAlpha)."""
+        return self.Load(filename, thumbnailsize)  # LoadThumbnail() is Py2
+
+
     def HighlightImage(self, img, factor):
         """Hook for ThumbnailCtrl, returns unchanged img."""
         return img
@@ -2454,21 +2478,21 @@ class ThemeImaging(object):
 
 class KEYS(object):
     """Keycode groupings, includes numpad keys."""
-    UP         = wx.WXK_UP,       wx.WXK_NUMPAD_UP
-    DOWN       = wx.WXK_DOWN,     wx.WXK_NUMPAD_DOWN
-    LEFT       = wx.WXK_LEFT,     wx.WXK_NUMPAD_LEFT
-    RIGHT      = wx.WXK_RIGHT,    wx.WXK_NUMPAD_RIGHT
-    PAGEUP     = wx.WXK_PAGEUP,   wx.WXK_NUMPAD_PAGEUP
-    PAGEDOWN   = wx.WXK_PAGEDOWN, wx.WXK_NUMPAD_PAGEDOWN
-    ENTER      = wx.WXK_RETURN,   wx.WXK_NUMPAD_ENTER
-    INSERT     = wx.WXK_INSERT,   wx.WXK_NUMPAD_INSERT
-    DELETE     = wx.WXK_DELETE,   wx.WXK_NUMPAD_DELETE
-    HOME       = wx.WXK_HOME,     wx.WXK_NUMPAD_HOME
-    END        = wx.WXK_END,      wx.WXK_NUMPAD_END
-    SPACE      = wx.WXK_SPACE,    wx.WXK_NUMPAD_SPACE
-    BACKSPACE  = wx.WXK_BACK,
-    TAB        = wx.WXK_TAB,      wx.WXK_NUMPAD_TAB
-    ESCAPE     = wx.WXK_ESCAPE,
+    UP         = (wx.WXK_UP,       wx.WXK_NUMPAD_UP)
+    DOWN       = (wx.WXK_DOWN,     wx.WXK_NUMPAD_DOWN)
+    LEFT       = (wx.WXK_LEFT,     wx.WXK_NUMPAD_LEFT)
+    RIGHT      = (wx.WXK_RIGHT,    wx.WXK_NUMPAD_RIGHT)
+    PAGEUP     = (wx.WXK_PAGEUP,   wx.WXK_NUMPAD_PAGEUP)
+    PAGEDOWN   = (wx.WXK_PAGEDOWN, wx.WXK_NUMPAD_PAGEDOWN)
+    ENTER      = (wx.WXK_RETURN,   wx.WXK_NUMPAD_ENTER)
+    INSERT     = (wx.WXK_INSERT,   wx.WXK_NUMPAD_INSERT)
+    DELETE     = (wx.WXK_DELETE,   wx.WXK_NUMPAD_DELETE)
+    HOME       = (wx.WXK_HOME,     wx.WXK_NUMPAD_HOME)
+    END        = (wx.WXK_END,      wx.WXK_NUMPAD_END)
+    SPACE      = (wx.WXK_SPACE,    wx.WXK_NUMPAD_SPACE)
+    BACKSPACE  = (wx.WXK_BACK, )
+    TAB        = (wx.WXK_TAB,      wx.WXK_NUMPAD_TAB)
+    ESCAPE     = (wx.WXK_ESCAPE, )
 
     ARROW      = UP + DOWN + LEFT + RIGHT
     PAGING     = PAGEUP + PAGEDOWN
@@ -2495,3 +2519,7 @@ def make_colour_bitmap(colour, size=(16, 16)):
     del dc
     bmp.SetMaskColour(wx.TRANSPARENT_PEN.Colour)
     return bmp
+
+
+try: text_types = (str, unicode)       # Py2
+except Exception: text_types = (str, ) # Py3
