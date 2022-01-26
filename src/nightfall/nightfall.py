@@ -669,7 +669,8 @@ class NightFall(wx.App):
         sizer_middle  = wx.BoxSizer(wx.HORIZONTAL)
         sizer_right   = wx.BoxSizer(wx.VERTICAL)
         sizer_combo   = wx.BoxSizer(wx.VERTICAL)
-        selector_time = controls.ClockSelector(panel_config, centericon=images.Icon48x48_32bit)
+        selector_time = controls.ClockSelector(panel_config,
+                                               centericon=images.Icon48x48_32bit.Bitmap)
         frame.selector_time = selector_time
         frame.label_combo = wx.StaticText(panel_config, label="Colour theme:")
 

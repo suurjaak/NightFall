@@ -22,6 +22,7 @@ import wx.lib.newevent
 
 from . import conf
 from . import gamma
+from . import images
 from . controls import BitmapComboBox, ColourManager
 
 

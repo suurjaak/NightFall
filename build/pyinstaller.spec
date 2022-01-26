@@ -8,7 +8,7 @@ This file is part of NightFall - screen color dimmer for late hours.
 Released under the MIT License.
 
 @created   18.10.2012
-@modified  23.01.2022
+@modified  26.01.2022
 ------------------------------------------------------------------------------
 """
 import os
@@ -55,7 +55,7 @@ exe = EXE(
     debug=DO_DEBUGVER, # Verbose or non-verbose debug statements printed
     strip=False,  # EXE and all shared libraries run through cygwin's strip, tends to render Win32 DLLs unusable
     upx=True,     # Using Ultimate Packer for eXecutables
-    icon=os.path.join(ROOTPATH, "build", "nightfall.ico"),
+    icon=os.path.join(ROOTPATH, "res", "Icon.ico"),
     console=False # Use the Windows subsystem executable instead of the console one
 )
 
