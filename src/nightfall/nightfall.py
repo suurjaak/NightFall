@@ -745,6 +745,7 @@ class NightFall(wx.App):
         ColourManager.Manage(text_detail, "ForegroundColour", wx.SYS_COLOUR_GRAYTEXT)
 
         frame.theme_editor = components.ThemeEditor(panel_editor, dimmer=self.dimmer)
+        frame.theme_editor.SetModalWrapper(self.modal)
 
         panel_editor.Sizer.Add(text_detail, proportion=10, border=5,
             flag=wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
