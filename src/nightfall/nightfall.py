@@ -32,6 +32,7 @@ except ImportError: import wx.lib.agw.thumbnailctrl as thumbnailevents  # Py2
 from . import components
 from . import conf
 from . import controls
+from . import images
 from . components import ThemeImaging
 from . controls   import ColourManager
 
@@ -96,9 +97,10 @@ class NightFall(wx.App):
 
         self.TRAYICONS = {False: {}, True: {}}
         # Cache tray icons in dicts [dimming now][schedule enabled]
-        for i, f in enumerate(conf.TrayIcons):
+        for i, img in enumerate([images.IconTray_Off, images.IconTray_Off_Scheduled,
+                                 images.IconTray_On,  images.IconTray_On_Scheduled]):
             dim, sch = (False if i < 2 else True), (True if i % 2 else False)
-            self.TRAYICONS[dim][sch] = wx.Icon(wx.Bitmap(f))
+            self.TRAYICONS[dim][sch] = img.Icon
         trayicon = self.trayicon = wx.adv.TaskBarIcon()
         self.set_tray_icon(self.TRAYICONS[False][False])
         trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.on_toggle_dimming_tray)
@@ -667,7 +669,7 @@ class NightFall(wx.App):
         sizer_middle  = wx.BoxSizer(wx.HORIZONTAL)
         sizer_right   = wx.BoxSizer(wx.VERTICAL)
         sizer_combo   = wx.BoxSizer(wx.VERTICAL)
-        selector_time = controls.ClockSelector(panel_config, centericon=conf.ClockIcon)
+        selector_time = controls.ClockSelector(panel_config, centericon=images.Icon48x48_32bit)
         frame.selector_time = selector_time
         frame.label_combo = wx.StaticText(panel_config, label="Colour theme:")
 
@@ -806,8 +808,7 @@ class NightFall(wx.App):
         )
         self.frame_console.Bind(wx.EVT_CLOSE, lambda e: self.frame_console.Hide())
 
-        icons = wx.IconBundle()
-        for p in conf.WindowIcons: icons.AddIcon(wx.Icon(p))
+        icons = images.get_appicons()
         frame.SetIcons(icons)
         self.frame_console.SetIcons(icons)
         frame.ToggleWindowStyle(wx.STAY_ON_TOP)

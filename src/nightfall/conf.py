@@ -26,7 +26,7 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.2.dev3"
+Version = "2.2.dev4"
 
 VersionDate = "26.01.2022"
 
@@ -72,32 +72,6 @@ ThemeBitmapSize = (80, 50)
 
 """Size for labelled theme bitmaps, as (w, h)."""
 ThemeNamedBitmapSize = ThemeBitmapSize[0], ThemeBitmapSize[1] + 15
-
-"""Application icons."""
-WindowIcons = [os.path.join(ResourceDirectory, "icon_{0}x{0}.png".format(x))
-               for x in (16, 32, 48)]
-
-"""Icons for brigthness slider in theme editor."""
-BrightnessIcons = [os.path.join(ResourceDirectory, "brightness_lo.png"),
-                   os.path.join(ResourceDirectory, "brightness_hi.png")]
-
-"""Clock central icon."""
-ClockIcon = os.path.join(ResourceDirectory, "icon_48x48.png")
-
-"""Tray icon when theme is applied."""
-TrayIconOn = os.path.join(ResourceDirectory, "tray_on.png")
-
-"""Tray icon when theme is not applied."""
-TrayIconOff = os.path.join(ResourceDirectory, "tray_off.png")
-
-"""Tray icon when theme is applied and schedule is on."""
-TrayIconOnScheduled = os.path.join(ResourceDirectory, "tray_on_scheduled.png")
-
-"""Tray icon when theme is not applied and schedule is on."""
-TrayIconOffScheduled = os.path.join(ResourceDirectory, "tray_off_scheduled.png")
-
-"""List of all tray icons by state, [applied now|schedule enabled]."""
-TrayIcons = [TrayIconOff, TrayIconOffScheduled, TrayIconOn, TrayIconOnScheduled]
 
 """Seconds between checking whether to apply/unapply schedule."""
 TimerInterval = 10

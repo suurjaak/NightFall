@@ -421,7 +421,7 @@ class ThemeEditor(wx.Panel):
         for i, text in enumerate(["brightness", "red", "green", "blue"]):
             if i: bmp1, bmp2 = [make_colour_bitmap(wx.Colour(**dict(kws, **{text: x})))
                                 for x in conf.ValidColourRange]
-            else: bmp1, bmp2 = map(wx.Bitmap, conf.BrightnessIcons)
+            else: bmp1, bmp2 = images.Brightness_Low.Bitmap, images.Brightness_High.Bitmap
             sbmp1 = wx.StaticBitmap(self, bitmap=bmp1)
             sbmp2 = wx.StaticBitmap(self, bitmap=bmp2)
             slider = wx.Slider(self, size=(-1, 20),

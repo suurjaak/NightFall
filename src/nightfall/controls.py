@@ -22,7 +22,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     25.01.2022
-@modified    25.01.2022
+@modified    26.01.2022
 ------------------------------------------------------------------------------
 """
 import collections
@@ -417,7 +417,7 @@ class ClockSelector(wx.Panel):
                              unit in 24 hours. Length of selections determines
                              the minimum selectable step. Defaults to a quarter
                              hour step.
-        @param   centericon  path to image file for clock center icon
+        @param   centericon  wx.Bitmap for clock center icon
         """
         super(ClockSelector, self).__init__(parent, id, pos, size,
             style | wx.FULL_REPAINT_ON_RESIZE, name
@@ -682,9 +682,8 @@ class ClockSelector(wx.Panel):
 
         # Draw center icon
         if self.centericon:
-            bmp = wx.Bitmap(self.centericon)
-            stepx, stepy = (x / 2 for x in bmp.Size)
-            gc.DrawBitmap(bmp, radius - stepx, radius - stepy, *bmp.Size)
+            stepx, stepy = (x / 2 for x in self.centericon.Size)
+            gc.DrawBitmap(self.centericon, radius - stepx, radius - stepy, *self.centericon.Size)
 
         # Refill corners
         gc.SetPen(wx.Pen(self.Parent.BackgroundColour, style=wx.SOLID))
@@ -730,10 +729,9 @@ class ClockSelector(wx.Panel):
 
         # Draw center icon
         if self.centericon:
-            bmp = wx.Bitmap(self.centericon)
-            stepx, stepy = (x / 2 for x in bmp.Size)
+            stepx, stepy = (x / 2 for x in self.centericon.Size)
             radius = width / 2
-            dc.DrawBitmap(bmp, radius - stepx, radius - stepy)
+            dc.DrawBitmap(self.centericon, radius - stepx, radius - stepy)
 
 
     def OnTopParentMouseWheel(self, event):
