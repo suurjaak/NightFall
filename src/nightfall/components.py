@@ -90,11 +90,10 @@ class Dimmer(object):
 
         def is_var_valid(name):
             v, v0 = getattr(conf, name), conf.Defaults[name]
-            return (len(v) == len(v0)
-                    and all(isinstance(a, type(b)) for a, b in zip(v, v0))) \
-                   if isinstance(v, (list, tuple)) and isinstance(v0, (list, tuple)) \
-                   else (isinstance(v, type(v0))
-                         or isinstance(v, text_types) and isinstance(v0, text_types))
+            if isinstance(v, (list, tuple)) and isinstance(v0, (list, tuple)):
+                return len(v) == len(v0) and all(isinstance(a, type(b)) for a, b in zip(v, v0))
+            return isinstance(v, type(v0)) \
+                   or isinstance(v, text_types) and isinstance(v0, text_types)
 
         if not is_theme_valid(conf.UnsavedTheme):
             conf.UnsavedTheme = None
@@ -142,8 +141,7 @@ class Dimmer(object):
         self.post_event("STARTUP POSSIBLE", StartupService.can_start())
         self.post_event("STARTUP TOGGLED",  conf.StartupEnabled)
         if self.should_dim():
-            msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() else \
-                  "MANUAL IN EFFECT"
+            msg = ("MANUAL IN EFFECT", "SCHEDULE IN EFFECT")[self.should_dim_scheduled()]
             self.post_event(msg, theme)
             self.apply_theme(theme, fade=True)
         else:
@@ -177,8 +175,7 @@ class Dimmer(object):
         theme, msg = conf.NormalTheme, "NORMAL DISPLAY"
         if self.should_dim() and not conf.SuspendedUntil:
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-            msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() else \
-                  "MANUAL IN EFFECT"
+            msg = ("MANUAL IN EFFECT", "SCHEDULE IN EFFECT")[self.should_dim_scheduled()]
         if theme != self.current_theme:
             self.apply_theme(theme, fade=True)
             self.post_event(msg)
@@ -222,8 +219,7 @@ class Dimmer(object):
         theme, msg = conf.NormalTheme, "NORMAL DISPLAY"
         if self.should_dim():
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-            msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() else \
-                  "MANUAL IN EFFECT"
+            msg = ("MANUAL IN EFFECT", "SCHEDULE IN EFFECT")[self.should_dim_scheduled()]
         self.apply_theme(theme, fade=True)
         self.post_event(msg, theme)
 
@@ -249,8 +245,7 @@ class Dimmer(object):
             start = (datetime.datetime.now() + delay).replace(second=0, microsecond=0)
             msg, theme = "NORMAL DISPLAY", conf.NormalTheme
         else:
-            msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() else \
-                  "MANUAL IN EFFECT"
+            msg = ("MANUAL IN EFFECT", "SCHEDULE IN EFFECT")[self.should_dim_scheduled()]
             start, theme = None, conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
         conf.SuspendedUntil = start
         self.post_event("SUSPEND TOGGLED", enabled)
@@ -319,8 +314,7 @@ class Dimmer(object):
         theme, msg = conf.NormalTheme, "NORMAL DISPLAY"
         if self.should_dim():
             theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-            msg = "SCHEDULE IN EFFECT" if self.should_dim_scheduled() else \
-                  "MANUAL IN EFFECT"
+            msg = ("MANUAL IN EFFECT", "SCHEDULE IN EFFECT")[self.should_dim_scheduled()]
         self.apply_theme(theme, fade=True)
         self.post_event(msg, theme)
 
@@ -481,6 +475,33 @@ class ThemeEditor(wx.Panel):
     ModalWrapper = property(GetModalWrapper, SetModalWrapper)
 
 
+    def Populate(self):
+        """Populates editor from configuration data."""
+        for name, theme in conf.Themes.items():
+            ThemeImaging.Add(name, theme)
+        if conf.UnsavedTheme:
+            ThemeImaging.Add(self.unsaved_name(), conf.UnsavedTheme)
+
+        items = [self.unsaved_name()] if conf.UnsavedTheme else []
+        items += sorted(conf.Themes, key=lambda x: x.lower())
+        value = self.unsaved_name() if conf.UnsavedTheme else conf.UnsavedName
+
+        cmb = self.combo_editor
+        self.Freeze()
+        try:
+            cmb.SetItems(items)
+            idx = cmb.FindItem(value)
+            if idx >= 0:
+                cmb.SetSelection(idx)
+                theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
+                cmb.ToolTip = ThemeImaging.Repr(theme)
+
+            theme = conf.UnsavedTheme or conf.Themes.get(cmb.Value)
+            for s, v in zip(self.sliders, theme) if theme else ():
+                s.Value, s.ToolTip = v, str(v)
+        finally: self.Thaw()
+
+
     def unsaved_name(self):
         """Returns current unsaved name for display, as "name *" or " (unsaved) "."""
         if conf.UnsavedName:  return conf.ModifiedTemplate % conf.UnsavedName
@@ -598,33 +619,6 @@ class ThemeEditor(wx.Panel):
         self.post_event()
 
 
-    def Populate(self):
-        """Populates editor from configuration data."""
-        for name, theme in conf.Themes.items():
-            ThemeImaging.Add(name, theme)
-        if conf.UnsavedTheme:
-            ThemeImaging.Add(self.unsaved_name(), conf.UnsavedTheme)
-
-        items = [self.unsaved_name()] if conf.UnsavedTheme else []
-        items += sorted(conf.Themes, key=lambda x: x.lower())
-        value = self.unsaved_name() if conf.UnsavedTheme else conf.UnsavedName
-
-        cmb = self.combo_editor
-        self.Freeze()
-        try:
-            cmb.SetItems(items)
-            idx = cmb.FindItem(value)
-            if idx >= 0:
-                cmb.SetSelection(idx)
-                theme = conf.Themes.get(conf.ThemeName, conf.UnsavedTheme)
-                cmb.ToolTip = ThemeImaging.Repr(theme)
-
-            theme = conf.UnsavedTheme or conf.Themes.get(cmb.Value)
-            for s, v in zip(self.sliders, theme) if theme else ():
-                s.Value, s.ToolTip = v, str(v)
-        finally: self.Thaw()
-
-
 
 class StartupService(object):
     """
@@ -658,7 +652,7 @@ class StartupService(object):
 
     @classmethod
     def get_shortcut_path_windows(cls):
-        path = "~\\Start Menu\\Programs\\Startup\\%s.lnk" % conf.Title
+        path = os.path.join("~", "Start Menu", "Programs", "Startup", "%s.lnk" % conf.Title)
         return os.path.expanduser(path)
 
     @classmethod
@@ -750,9 +744,9 @@ class ThemeImaging(object):
         if short:
             result = "%s #%2X%2X%2X" % ((btext, ) + tuple(theme[:3]))
         else:
-            result = "%s brightness.\n%s" % (btext,
-                     ", ".join("%s at %d%%" % (s, theme[i] / 255. * 100)
-                               for i, s in enumerate(("Red", "green", "blue"))))
+            ctext = ", ".join("%s at %d%%" % (s, theme[i] / 255. * 100)
+                              for i, s in enumerate(("Red", "green", "blue")))
+            result = "%s brightness.\n%s" % (btext, ctext)
             if cls._supported.get(tuple(theme)) is False:
                 result += "\n\nNot supported by hardware."
         return result

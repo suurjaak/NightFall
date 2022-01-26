@@ -391,23 +391,24 @@ class BitmapListCtrl(wx.lib.agw.thumbnailctrl.ThumbnailCtrl):
 
 class ClockSelector(wx.Panel):
     """
-    A 24h clock for selecting any number of periods from 24 hours,
+    A 24h clock face for selecting any number of time periods,
     with a quarter hour step by default.
 
     Clicking and dragging with left or right button selects or deselects,
     double-clicking toggles an hour.
     """
 
-    COLOUR_ON     = wx.Colour(241, 184, 45, 140)
-    COLOUR_OFF    = wx.Colour(235, 236, 255)
-    COLOUR_TEXT   = wx.BLACK
-    COLOUR_LINES  = wx.BLACK
-    COLOUR_TIME   = wx.RED
-    FONT_SIZE     = 8
-    INTERVAL      = 30
+    COLOUR_ON        = wx.Colour(241, 184, 45, 140)
+    COLOUR_OFF       = wx.Colour(235, 236, 255)
+    COLOUR_TEXT      = wx.BLACK
+    COLOUR_LINES     = wx.BLACK
+    COLOUR_TIME      = wx.RED
+    FONT_SIZE        = 8
+    INTERVAL         = 30
     INTERVAL_TOOLTIP = 1
-    RADIUS_CENTER = 20
-    ANGLE_START   = math.pi / 2 # 0-hour position, in radians from horizontal
+    RADIUS_CENTER    = 20
+    ANGLE_START      = math.pi / 2 # 0-hour position, in radians from horizontal
+
 
     def __init__(self, parent, id=-1, pos=wx.DefaultPosition,
                  size=(400, 400), style=0, name=wx.PanelNameStr,
@@ -423,8 +424,8 @@ class ClockSelector(wx.Panel):
             style | wx.FULL_REPAINT_ON_RESIZE, name
         )
 
-        self.BackgroundColour = ClockSelector.COLOUR_OFF
-        self.ForegroundColour = ClockSelector.COLOUR_TEXT
+        self.BackgroundColour = self.COLOUR_OFF
+        self.ForegroundColour = self.COLOUR_TEXT
 
         self.USE_GC        = True # Use GraphicsContext instead of DC
         self.buffer        = None # Bitmap buffer
@@ -432,9 +433,9 @@ class ClockSelector(wx.Panel):
         self.centericon    = centericon
         self.sticky_value  = None # True|False|None if selecting|de-|nothing
         self.last_unit     = None # Last changed time unit
-        self.penult_unit   = None # Last but one unit, to detect move backwards
+        self.penult_unit   = None # Last but one unit, to detect moving backwards
         self.dragback_unit = None # Unit on a section edge dragged backwards
-        self.sectors       = None # [(angle, radius, ptlist), ]
+        self.sectors       = None # [[(x, y), ], ] center-edge2-edge1-center
         self.hourlines     = None # [(x1, y1, x2, y2), ]
         self.hourtexts     = None # ["00", ]
         self.hourtext_pts  = None # [(x, y), ]
@@ -459,6 +460,7 @@ class ClockSelector(wx.Panel):
 
 
     def OnTimer(self, event):
+        """Handler for timer, refreshes clock face."""
         if not self: return
         if self.USE_GC: self.InitBuffer()
         self.Refresh()
@@ -494,18 +496,12 @@ class ClockSelector(wx.Panel):
         event.Skip()
         min_size = self.MinSize
         self.Size = max(min_size[0], min(self.Size)), max(min_size[1], min(self.Size))
-        LENGTH = len(self.selections)
+
         self.sectors      = []
         self.hourlines    = []
         self.hourtexts    = []
         self.hourtext_pts = []
         self.notch_pts    = []
-        last_line = None
-        notch_pts = []
-        radius = self.Size[0] / 2
-        radius_linestart = radius / 2
-        pt_center = radius, radius
-
 
         def polar_to_canvas(angle, radius, x=None, y=None):
             """
@@ -513,7 +509,7 @@ class ClockSelector(wx.Panel):
             point starts from the center - ordinary Cartesian system.
             On canvas, zero starts from top left and grows down and right.)
 
-            @param   angle   polar angle where the x or y coordinate are at
+            @param   angle   polar angle where the x or y coordinates are at
             @param   radius  polar radius of the (x, y)
             @return          (x, y) or (x) or (y), depending on input arguments
             """
@@ -525,65 +521,67 @@ class ClockSelector(wx.Panel):
 
 
         """
-        All polar angles need - to map to graphics context.
+        All polar angles need reversed sign to map to graphics context.
         All (x,y) from polar coordinates need (-radius, +radius).
-        -----------------------------------
-        |                                 |
-        |                                 |
-        |                                 |
-        |                                 |
-        |                               --|
-        |                          --     |
-        |                     --          |
-        |                o ---------------|
-        |                                 |
-        |                                 |
-        |                                 |
-        |                                 |
-        |                                 |
-        |                                 |
-        |                                 |
-        -----------------------------------
+        -------------------
+        |                 |
+        |               --|
+        |            --   |
+        |        o -------|
+        |                 |
+        |                 |
+        |                 |
+        -------------------
         """
 
+        LENGTH            = len(self.selections)
+        RADIUS            = self.Size[0] / 2
+        RADIUS_LINESTART  = RADIUS / 2
+        PT_CENTER         = RADIUS, RADIUS
         HOUR_RADIUS_RATIO = 6 / 8.
+
         textwidth, textheight = self.GetTextExtent("02")
-        for i, text in enumerate(["%02d" % h for h in range(24)]):
-            angle = ClockSelector.ANGLE_START - i * 2 * math.pi / 24. - (2 * math.pi / 48.)
-            x_polar, y_polar = HOUR_RADIUS_RATIO * radius * math.cos(angle), HOUR_RADIUS_RATIO * radius * math.sin(angle)
-            x, y = polar_to_canvas(angle, radius, x=x_polar, y=y_polar)
+        for i, text in enumerate(["%02d" % h for h in range(24)]):  # Assemble hour text positions
+            angle = self.ANGLE_START - i * 2 * math.pi / 24. - (2 * math.pi / 48.)
+            x_polar, y_polar = (HOUR_RADIUS_RATIO * RADIUS * f(angle) for f in (math.cos, math.sin))
+            x, y = polar_to_canvas(angle, RADIUS, x=x_polar, y=y_polar)
             x, y = x - textwidth / 2, y - textheight / 2
-            alpha = math.pi / 2 - (angle - math.pi)
-            radius_ray = radius / math.sin(alpha)
             self.hourtext_pts.append((x, y))
             self.hourtexts.append(text)
 
-        for i in range(LENGTH):
-            angle = math.pi + (2 * math.pi) / LENGTH * (i) + ClockSelector.ANGLE_START
-            alpha = angle % (math.pi / 2) # force into 90deg
-            alpha = alpha if alpha < math.pi / 4 else math.pi / 2 - alpha
-            radius_ray = (radius - 1) / math.cos(alpha) if alpha else radius
-            radius_start = radius_linestart
-            if alpha == math.pi / 4: radius_ray -= 8
-            if not i % 12: radius_start *= 0.8
-            x1, y1 = radius_start * (math.cos(angle)) + radius, radius_start * (math.sin(angle)) + radius
-            x2, y2 = radius_ray * (math.cos(angle)) + radius, radius_ray * (math.sin(angle)) + radius
-            if not i % 4:
+        last_line = None
+        for i in range(LENGTH):  # Assemble hour/quarter line positions and sector polygons
+            angle = math.pi + (2 * math.pi) / LENGTH * (i) + self.ANGLE_START
+            # alpha: angle within one quadrant of a 24h clock
+            alpha = angle % (math.pi / 2)  # Force into 90deg
+            alpha = alpha if alpha < math.pi / 4 else math.pi / 2 - alpha  # Force into 45deg
+            radius_ray = (RADIUS - 1) / math.cos(alpha) if alpha else RADIUS  # Lengthen radius to reach edge
+            radius_start = RADIUS_LINESTART
+            if alpha == math.pi / 4: radius_ray -= 8  # End corner lines earlier for rounded corners
+            if not i % 12: radius_start *= 0.8        # Start quadrant first sector lines closer to center
+
+            # Assemble hour/quarter line positions
+            x1, y1 = radius_start * (math.cos(angle)) + RADIUS, radius_start * (math.sin(angle)) + RADIUS
+            x2, y2 = radius_ray   * (math.cos(angle)) + RADIUS, radius_ray   * (math.sin(angle)) + RADIUS
+            if not i % 4:  # Is full hour
                 self.hourlines.append((x1, y1, x2, y2))
             else:
-                ptx1 = (radius_ray - (3 if i % 2 else 10)) * (math.cos(angle)) + radius
-                pty1 = (radius_ray - (3 if i % 2 else 10)) * (math.sin(angle)) + radius
-                notch_pts.append((ptx1, pty1, x2, y2))
-            x1, y1 = pt_center
-            if alpha == math.pi / 4:
+                # Make half-hour notches longer than quarter-hour
+                ptx1 = (radius_ray - (3 if i % 2 else 10)) * (math.cos(angle)) + RADIUS
+                pty1 = (radius_ray - (3 if i % 2 else 10)) * (math.sin(angle)) + RADIUS
+                self.notch_pts.append((ptx1, pty1, x2, y2))
+
+            # Assemble sector polygon
+            x1, y1 = PT_CENTER
+            if alpha == math.pi / 4:  # Corner sector, restore previously subtracted
                 radius_ray += 8
-                x2, y2 = radius_ray * (math.cos(angle)) + radius, radius_ray * (math.sin(angle)) + radius
+                x2, y2 = radius_ray * (math.cos(angle)) + RADIUS, radius_ray * (math.sin(angle)) + RADIUS
             if last_line:
                 self.sectors.append([(x1, y1), (x2, y2), last_line[1], last_line[0], ])
             last_line = ((x1, y1), (x2, y2))
-        # Connect overflow
-        self.sectors.append([last_line[0], last_line[1], self.sectors[0][2], self.sectors[0][3]  ])
-        self.notch_pts = notch_pts
+        self.sectors.append([last_line[0], last_line[1],  # Connect overflow
+                             self.sectors[0][2], self.sectors[0][3]])
+
         if self.USE_GC: self.InitBuffer()
 
 
@@ -638,18 +636,18 @@ class ClockSelector(wx.Panel):
         radius = width / 2
 
         # Draw clock background
-        gc.SetPen(wx.Pen(ClockSelector.COLOUR_LINES, style=wx.TRANSPARENT))
+        gc.SetPen(wx.Pen(self.COLOUR_LINES, style=wx.TRANSPARENT))
         gc.SetBrush(wx.Brush(self.BackgroundColour, wx.SOLID))
         gc.DrawRoundedRectangle(0, 0, width - 1, height - 1, 18)
 
         # Draw and fill all selected sectors
-        gc.SetPen(wx.Pen(ClockSelector.COLOUR_ON, style=wx.TRANSPARENT))
-        gc.SetBrush(wx.Brush(ClockSelector.COLOUR_ON, wx.SOLID))
+        gc.SetPen(wx.Pen(self.COLOUR_ON, style=wx.TRANSPARENT))
+        gc.SetBrush(wx.Brush(self.COLOUR_ON, wx.SOLID))
         for sect in (x for i, x in enumerate(self.sectors) if self.selections[i]):
             gc.DrawLines(sect)
 
         # Draw hour lines and smaller notches
-        gc.SetPen(wx.Pen(ClockSelector.COLOUR_LINES, width=1))
+        gc.SetPen(wx.Pen(self.COLOUR_LINES, width=1))
         for x1, y1, x2, y2 in self.hourlines:
             gc.StrokeLines([(x1, y1), (x2, y2)])
         for x1, y1, x2, y2 in self.notch_pts:
@@ -662,10 +660,10 @@ class ClockSelector(wx.Panel):
             if width / 6 < 2.8 * textwidth and i % 2: continue # for i, text
             gc.DrawText(text, *self.hourtext_pts[i])
 
-        # Draw current time
+        # Draw current time ray
         tm = datetime.datetime.now().time()
         hours = tm.hour + tm.minute / 60.
-        angle = (2 * math.pi / 24) * (hours) - ClockSelector.ANGLE_START
+        angle = (2 * math.pi / 24) * (hours) - self.ANGLE_START
         alpha = angle % (math.pi / 2) # Force into 90deg
         alpha = alpha if alpha < math.pi / 4 else math.pi / 2 - alpha
         if alpha:
@@ -676,8 +674,8 @@ class ClockSelector(wx.Panel):
             radius_ray -= 8
         x1, y1 = radius, radius
         x2, y2 = radius_ray * (math.cos(angle)) + radius, radius_ray * (math.sin(angle)) + radius
-        gc.SetPen(wx.Pen(ClockSelector.COLOUR_TIME, style=wx.SOLID))
-        gc.SetBrush(wx.Brush(ClockSelector.COLOUR_TIME, wx.SOLID))
+        gc.SetPen(wx.Pen(self.COLOUR_TIME, style=wx.SOLID))
+        gc.SetBrush(wx.Brush(self.COLOUR_TIME, wx.SOLID))
         gc.StrokeLines([(x1, y1), (x2, y2)])
 
         # Draw center icon
@@ -685,7 +683,7 @@ class ClockSelector(wx.Panel):
             stepx, stepy = (x / 2 for x in self.centericon.Size)
             gc.DrawBitmap(self.centericon, radius - stepx, radius - stepy, *self.centericon.Size)
 
-        # Refill corners
+        # Refill rounded corners with background colour
         gc.SetPen(wx.Pen(self.Parent.BackgroundColour, style=wx.SOLID))
         gc.SetBrush(wx.Brush(self.Parent.BackgroundColour, wx.SOLID))
         CORNER_LINES = 18 - 7
@@ -696,7 +694,8 @@ class ClockSelector(wx.Panel):
                 x2, y2 = x1, y1 + (CORNER_LINES - j) * (1 if i in [0, 3] else -1)
                 gc.StrokeLines([(x1, y1), (x2, y2)])
 
-        gc.SetPen(wx.Pen(ClockSelector.COLOUR_LINES))
+        # Draw rounded outer rectangle
+        gc.SetPen(wx.Pen(self.COLOUR_LINES))
         gc.SetBrush(wx.TRANSPARENT_BRUSH)
         gc.DrawRoundedRectangle(0, 0, width - 1, height - 1, 18)
 
@@ -711,19 +710,19 @@ class ClockSelector(wx.Panel):
 
         # Draw highlighted sectors
         dc.Pen = wx.TRANSPARENT_PEN
-        dc.Brush = wx.Brush(ClockSelector.COLOUR_ON, wx.SOLID)
+        dc.Brush = wx.Brush(self.COLOUR_ON, wx.SOLID)
         for sect in (x for i, x in enumerate(self.sectors) if self.selections[i]):
             dc.DrawPolygon(sect)
 
         # Draw outer border
-        dc.Pen = wx.Pen(ClockSelector.COLOUR_LINES)
+        dc.Pen = wx.Pen(self.COLOUR_LINES)
         dc.Brush = wx.TRANSPARENT_BRUSH
         dc.DrawRectangle(0, 0, width, height)
 
-        # Draw hour lines and write hours
-        dc.Pen = wx.Pen(ClockSelector.COLOUR_LINES, width=1)
+        # Draw hour lines and hour texts
+        dc.Pen = wx.Pen(self.COLOUR_LINES, width=1)
         dc.DrawLineList(self.hourlines)
-        dc.TextForeground = ClockSelector.COLOUR_TEXT
+        dc.TextForeground = self.COLOUR_TEXT
         dc.Font = self.Font
         dc.DrawTextList(self.hourtexts, self.hourtext_pts)
 
@@ -770,7 +769,7 @@ class ClockSelector(wx.Panel):
         center = [self.Size.width / 2] * 2
         unit, x, y = None, event.Position.x, event.Position.y
         dist_center = ((center[0] - x) ** 2 + (center[1] - y) ** 2) ** 0.5
-        if dist_center < ClockSelector.RADIUS_CENTER:
+        if dist_center < self.RADIUS_CENTER:
             self.penult_unit = self.last_unit = None
         else:
             for i, sector in enumerate(self.sectors):
