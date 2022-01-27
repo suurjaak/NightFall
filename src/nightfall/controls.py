@@ -780,7 +780,7 @@ class ClockSelector(wx.Panel):
         refresh, do_tooltip = False, False
         if event.LeftDown() or event.RightDown():
             self.CaptureMouse()
-            if 0 <= unit < len(self.selections):
+            if unit is not None and 0 <= unit < len(self.selections):
                 self.penult_unit = None
                 self.last_unit, self.sticky_value = unit, int(event.LeftDown())
                 self.dragback_unit = None
@@ -790,7 +790,7 @@ class ClockSelector(wx.Panel):
         elif event.LeftDClick() or event.RightDClick():
             # Toggle an entire hour on double-click
             if unit is not None:
-                steps = len(self.selections) / 24
+                steps = len(self.selections) // 24
                 low, hi = unit - unit % steps, unit - unit % steps + steps
                 units = self.selections[low:hi]
                  # Toggle hour off on left-dclick only if all set
@@ -803,14 +803,14 @@ class ClockSelector(wx.Panel):
             self.penult_unit, self.dragback_unit = None, None
         elif event.Dragging():
             if self.sticky_value is not None and unit != self.last_unit \
-            and 0 <= unit < len(self.selections):
+            and unit is not None and 0 <= unit < len(self.selections):
                 LENGTH = len(self.selections)
                 STARTS = range(2)
                 ENDS = range(LENGTH - 2, LENGTH)
                 def is_overflow(a, b):
                     return (a in STARTS and b in ENDS) or (a in ENDS and b in STARTS)
                 def get_direction(a, b):
-                    result = 1 if b > a else -1
+                    result = 1 if None in (a, b) or b > a else -1
                     result *= -1 if is_overflow(a, b) else 1
                     return result
 
