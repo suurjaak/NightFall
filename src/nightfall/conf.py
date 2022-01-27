@@ -26,7 +26,7 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.2.dev12"
+Version = "2.2.dev13"
 
 VersionDate = "27.01.2022"
 

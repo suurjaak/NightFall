@@ -10,7 +10,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    23.01.2022
+@modified    27.01.2022
 ------------------------------------------------------------------------------
 """
 import ctypes
@@ -82,7 +82,7 @@ def get_screen_device():
             XOpenDisplay = xlib.XOpenDisplay
             XOpenDisplay.restype = ctypes.POINTER(Display)
             XOpenDisplay.argtypes = [ctypes.c_char_p]
-            get_screen_device.device = XOpenDisplay("")
+            get_screen_device.device = XOpenDisplay(b"")
     device = get_screen_device.device
     return device
 

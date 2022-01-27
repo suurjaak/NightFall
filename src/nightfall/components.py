@@ -420,7 +420,7 @@ class ThemeEditor(wx.Panel):
             else: bmp1, bmp2 = images.Brightness_Low.Bitmap, images.Brightness_High.Bitmap
             sbmp1 = wx.StaticBitmap(self, bitmap=bmp1)
             sbmp2 = wx.StaticBitmap(self, bitmap=bmp2)
-            slider = wx.Slider(self, size=(-1, 20),
+            slider = wx.Slider(self, size=(-1, 20 if "win32" == sys.platform else 25),
                 minValue=conf.ValidColourRange[0]  if i else   0, # Brightness
                 maxValue=conf.ValidColourRange[-1] if i else 255, # goes 0..255
             )
