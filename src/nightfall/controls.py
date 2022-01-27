@@ -22,7 +22,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     25.01.2022
-@modified    26.01.2022
+@modified    27.01.2022
 ------------------------------------------------------------------------------
 """
 import collections

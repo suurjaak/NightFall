@@ -443,8 +443,8 @@ class ThemeEditor(wx.Panel):
         sizer_tbuttons = wx.BoxSizer(wx.HORIZONTAL)
         button_save  = self.button_save  = wx.Button(self, label=" Save..")
         button_reset = self.button_reset = wx.Button(self, label="Reset")
-        button_reset.MinSize = combo_editor.Size[0] / 2 - 3, -1
-        button_save.MinSize  = combo_editor.Size[0] / 2 - 2, -1
+        button_reset.MinSize = combo_editor.Size[0] // 2 - 3, -1
+        button_save.MinSize  = combo_editor.Size[0] // 2 - 2, -1
         button_save.ToolTip  = "Save settings as a named theme"
         button_reset.ToolTip = "Restore original settings"
 
@@ -779,16 +779,16 @@ class ThemeImaging(object):
         dc.SetFont(wx.Font(13, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL,
                            wx.FONTWEIGHT_BOLD, faceName="Tahoma"))
         twidth, theight = dc.GetTextExtent(btext)
-        ystart = (conf.ThemeBitmapSize[1] - theight) / 2 - 4
+        ystart = (conf.ThemeBitmapSize[1] - theight) // 2 - 4
 
         # Draw brightness text shadow (dark text shifted +-1px from each corner)
         dc.SetTextForeground(wx.BLACK)
         for dx, dy in [(-1, 1), (1, 1), (1, -1), (-1, -1)]:
-            dc.DrawText(btext, (size[0] - twidth) / 2 + dx, ystart + dy)
+            dc.DrawText(btext, (size[0] - twidth) // 2 + dx, ystart + dy)
             
         # Draw brightness text
         dc.SetTextForeground(wx.WHITE)
-        dc.DrawText(btext, (size[0] - twidth) / 2, ystart)
+        dc.DrawText(btext, (size[0] - twidth) // 2, ystart)
 
         # Draw colour code on white background
         dc.SetFont(wx.Font(8, wx.FONTFAMILY_SWISS, wx.FONTSTYLE_NORMAL,
@@ -801,7 +801,7 @@ class ThemeImaging(object):
         dc.Pen = wx.LIGHT_GREY_PEN # Draw separator above colour code
         dc.DrawLine(0, ystart - 4, bmp.Size[0], ystart - 4)
         dc.SetTextForeground(wx.BLACK if supported else wx.RED)
-        dc.DrawText(ctext, (bmp.Size[0] - cwidth) / 2 - 1, ystart - 1)
+        dc.DrawText(ctext, (bmp.Size[0] - cwidth) // 2 - 1, ystart - 1)
         dc.DrawLine(0, ystart + cheight, bmp.Size[0], ystart + cheight)
 
         if border: # Draw outer border
@@ -828,7 +828,7 @@ class ThemeImaging(object):
                 text = ".." + text0[cut:]
                 tw, th = dc.GetTextExtent(text)
             dc.SetTextForeground("#7D7D7D") # Same as hard-coded in ThumbnailCtrl
-            dc.DrawText(text, (size[0] - tw) / 2, ystart)
+            dc.DrawText(text, (size[0] - tw) // 2, ystart)
 
         del dc
         return bmp
