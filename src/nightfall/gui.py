@@ -132,7 +132,8 @@ class NightFall(wx.App):
         topic, data = event.Topic, event.Data
         if "THEME FAILED" == topic:
             self.frame.combo_themes.Refresh()
-            self.frame.theme_editor.Refresh() # @todo vbl peab overridema
+            self.frame.list_themes.SetItems(sorted(conf.Themes, key=lambda x: x.lower()))
+            self.frame.theme_editor.Refresh()
             self.frame.label_error.Label = "Setting unsupported by hardware."
             self.frame.label_error.Show()
             self.frame.label_error.ContainingSizer.Layout()
