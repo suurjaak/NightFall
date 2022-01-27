@@ -26,7 +26,7 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.2.dev5"
+Version = "2.2.dev6"
 
 VersionDate = "27.01.2022"
 
@@ -43,7 +43,7 @@ else:
     ApplicationFile = os.path.join(ApplicationDirectory, Title.lower(), "main.py")
     ApplicationPath = "%s" % Title.lower()
     ResourceDirectory = os.path.abspath(os.path.join(ApplicationDirectory, "..", "res"))
-    ShortcutIconPath = os.path.join(ResourceDirectory, "nightfall.ico")
+    ShortcutIconPath = os.path.join(ResourceDirectory, "Icon.ico")
     EtcDirectory = os.path.join(os.path.abspath(os.path.dirname(__file__)), "etc")
 
 """List of attribute names that can be saved to and loaded from ConfigFile."""
