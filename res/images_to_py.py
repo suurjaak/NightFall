@@ -8,7 +8,7 @@ Released under the MIT License.
 
 @author    Erki Suurjaak
 @created   26.01.2022
-@modified  26.01.2022
+@modified  27.01.2022
 ------------------------------------------------------------------------------
 """
 import base64
@@ -25,7 +25,7 @@ Q3 = '"""'
 """Application icons of different size and colour depth."""
 APPICONS = [("Icon{0}x{0}_{1}bit.png".format(s, b),
              "NightFall application {0}x{0} icon, {1}-bit colour.".format(s, b))
-            for s in (16, 32, 48) for b in (32, )]
+            for s in (16, 32, 48, 64, 256) for b in (32, )]
 IMAGES = {
     "Brightness_High.png":
         "Small image for brightness slider end in theme editor.",
