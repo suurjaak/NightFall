@@ -85,15 +85,16 @@ class NightFall(wx.App):
         frame.label_about.Bind(wx.html.EVT_HTML_LINK_CLICKED,
                             lambda e: webbrowser.open(e.GetLinkInfo().Href))
 
-        frame.Bind(controls.EVT_TIME_SELECTOR, self.on_change_schedule)
-        frame.Bind(wx.EVT_CLOSE,               self.on_toggle_settings)
-        frame.Bind(wx.EVT_ACTIVATE,            self.on_activate_window)
-        frame.Bind(wx.EVT_MOVE,                self.on_move)
-        frame.Bind(wx.EVT_CHAR_HOOK,           self.on_key)
-        frame.Bind(wx.EVT_SYS_COLOUR_CHANGED,  self.on_sys_colour_change)
-        self.Bind(components.EVT_DIMMER,       self.on_dimmer_event)
-        self.Bind(components.EVT_THEME_EDITOR, lambda _: self.populate())
-        self.Bind(wx.EVT_LEFT_DCLICK,          self.on_toggle_console, frame.label_combo)
+        frame.Bind(controls.EVT_CLOCK_SELECTOR, self.on_change_schedule)
+        frame.Bind(controls.EVT_CLOCK_CENTER,   self.on_toggle_dimming)
+        frame.Bind(wx.EVT_CLOSE,                self.on_toggle_settings)
+        frame.Bind(wx.EVT_ACTIVATE,             self.on_activate_window)
+        frame.Bind(wx.EVT_MOVE,                 self.on_move)
+        frame.Bind(wx.EVT_CHAR_HOOK,            self.on_key)
+        frame.Bind(wx.EVT_SYS_COLOUR_CHANGED,   self.on_sys_colour_change)
+        self.Bind(components.EVT_DIMMER,        self.on_dimmer_event)
+        self.Bind(components.EVT_THEME_EDITOR,  lambda _: self.populate())
+        self.Bind(wx.EVT_LEFT_DCLICK,           self.on_toggle_console, frame.label_combo)
 
         self.TRAYICONS = {False: {}, True: {}}
         # Cache tray icons in dicts [dimming now][schedule enabled]
@@ -103,7 +104,7 @@ class NightFall(wx.App):
             self.TRAYICONS[dim][sch] = img.Icon
         trayicon = self.trayicon = wx.adv.TaskBarIcon()
         self.set_tray_icon()
-        trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.on_toggle_dimming_tray)
+        trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.on_toggle_dimming)
         trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DOWN,   self.on_lclick_tray)
         trayicon.Bind(wx.adv.EVT_TASKBAR_RIGHT_DOWN,  self.on_open_tray_menu)
 
@@ -540,7 +541,7 @@ class NightFall(wx.App):
         self.dimmer.toggle_manual(event.IsChecked())
 
 
-    def on_toggle_dimming_tray(self, event):
+    def on_toggle_dimming(self, event):
         """
         Handler for toggling dimming on/off from the tray, can affect either
         schedule or global flag.

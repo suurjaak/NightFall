@@ -38,8 +38,11 @@ try: import wx.lib.agw.scrolledthumbnail as thumbnailevents     # Py3
 except ImportError: thumbnailevents = wx.lib.agw.thumbnailctrl  # Py2
 
 
-"""Event class and event binder for change-events in TimeSelector."""
-TimeSelectorEvent, EVT_TIME_SELECTOR = wx.lib.newevent.NewEvent()
+"""Event class and event binder for change-events in ClockSelector."""
+ClockSelectorEvent, EVT_CLOCK_SELECTOR = wx.lib.newevent.NewEvent()
+
+"""Event class and event binder for double-clicking center of ClockSelector."""
+ClockCenterEvent, EVT_CLOCK_CENTER = wx.lib.newevent.NewEvent()
 
 
 class KEYS(object):
@@ -788,8 +791,8 @@ class ClockSelector(wx.Panel):
                     self.selections[unit] = self.sticky_value
                     refresh = True
         elif event.LeftDClick() or event.RightDClick():
-            # Toggle an entire hour on double-click
             if unit is not None:
+                # Toggle an entire hour on double-click
                 steps = len(self.selections) // 24
                 low, hi = unit - unit % steps, unit - unit % steps + steps
                 units = self.selections[low:hi]
@@ -797,6 +800,8 @@ class ClockSelector(wx.Panel):
                 value = 0 if event.RightDClick() else int(not all(units))
                 self.selections[low:hi] = [value] * len(units)
                 refresh = (units != self.selections[low:hi])
+            elif event.LeftDClick():
+                wx.PostEvent(self.TopLevelParent, ClockCenterEvent())
         elif event.LeftUp() or event.RightUp():
             if self.HasCapture(): self.ReleaseMouse()
             self.last_unit,   self.sticky_value  = None, None
@@ -892,8 +897,7 @@ class ClockSelector(wx.Panel):
             do_tooltip = True
             self.InitBuffer()
             self.Refresh()
-            event = TimeSelectorEvent()
-            wx.PostEvent(self.TopLevelParent.EventHandler, event)
+            wx.PostEvent(self.TopLevelParent, ClockSelectorEvent())
         if do_tooltip:
             if self.tooltip_timer: self.tooltip_timer.Stop()
             self.tooltip_timer = wx.CallLater(self.INTERVAL_TOOLTIP * 1000,
