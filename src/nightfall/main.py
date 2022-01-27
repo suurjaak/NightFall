@@ -8,7 +8,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     23.01.2022
-@modified    23.01.2022
+@modified    27.01.2022
 ------------------------------------------------------------------------------
 """
 try: from urllib.parse import quote_plus           # Py3
@@ -19,7 +19,7 @@ import sys
 import wx
 
 from . import conf
-from . nightfall import NightFall
+from . gui import NightFall
 
 
 def run():
