@@ -8,7 +8,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     25.01.2022
-@modified    26.01.2022
+@modified    27.01.2022
 ------------------------------------------------------------------------------
 """
 import copy
@@ -287,7 +287,8 @@ class Dimmer(object):
         if not result:
             self.post_event("THEME FAILED", theme)
             # Unsupported theme: jump back to normal if not fading
-            if not self.fade_target_theme: self.apply_theme(conf.NormalTheme)
+            if not self.fade_target_theme and theme != conf.NormalTheme:
+                self.apply_theme(conf.NormalTheme)
         return result
 
 
