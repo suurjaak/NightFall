@@ -26,7 +26,7 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.2.dev7"
+Version = "2.2.dev8s"
 
 VersionDate = "27.01.2022"
 
@@ -293,7 +293,7 @@ def save():
             # Try path under application folder first, then user-specific path
             try: os.makedirs(os.path.split(path)[0])
             except Exception: pass
-            try: f = open(path, "wb")
+            try: f = open(path, "w")
             except Exception: continue # for path
             else: break # for path
 
