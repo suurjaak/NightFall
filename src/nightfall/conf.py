@@ -200,7 +200,7 @@ InfoEditorText = (
 AboutHTMLTemplate = """
 <font face="Tahoma" size=2 color="%%(textcolour)s">
   <p>
-  NightFall can change screen colour gamma and brightness settings, 
+  Change screen colour gamma and brightness settings, 
   in order to achieve a more natural feeling during late hours.
   </p>
 

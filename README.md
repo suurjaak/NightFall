@@ -1,15 +1,18 @@
 NightFall
 =========
 
-A small tray program that can change screen brightness and colour gamma settings
+A screen color dimmer for late hours.
+
+NightFall is a tray program to change screen brightness and colour gamma settings
 on schedule, in order to achieve a more natural feeling during late hours.
 
 Looking at a lit screen in a dark room can interfere with the sleep cycle,
+and is hard on the eyes in general.
 NightFall can provide a warm-coloured darker screen on desktop and laptop 
 computers alike.
 
-Comes with a number of pre-defined brightness and colour themes, you can
-also create and save your own themes.
+Comes with a number of pre-defined brightness and colour themes;
+new themes can be added.
 
 [![Screenshots](https://raw.github.com/suurjaak/NightFall/gh-pages/img/th_collage.png)](https://raw.github.com/suurjaak/NightFall/gh-pages/img/collage.png)
 
@@ -19,28 +22,34 @@ Windows binaries and more screenshots at https://suurjaak.github.io/NightFall.
 Using The Program
 -----------------
 
-NightFall stays in the system tray as a grey or orange moon icon, depending on
-being active, dimming the screen on command or according to the set schedule.
+NightFall stays in the system tray as a grey or orange moon icon,
+dimming the screen on command or according to set schedule
+(grey icon: dimming inactive, orange: dimming applied).
 
+Clicking the tray icon shows or hides the program window.
+Double-clicking the tray icon toggles dimming on or off.
+Right-clicking the tray icon opens options menu.
+
+Program window has tabs for managing the time schedule and startup,
+managing saved themes, and editing theme brightness and colour.
 Schedule can be set in quarter-hour steps.
 Applied theme can be suspended for a selected number of minutes.
 
-Double-clicking the tray icon toggles current colour theme on or off;
-on by schedule if schedule covers current time but is currently disabled.
-Single-clicking the tray icon shows or hides the options window.
-Right-clicking the tray icon opens options menu.
-
-Left-clicking on time schedule toggles time period on, right-clicking off,
-same for clicking and dragging.
-Double-clicking on time schedule toggles an entire hour on or off.
-Scrolling the mouse wheel on time schedule grows or shrinks the current
-active section.
+Using the 24h clock face in schedule tab:
+- left-click to toggle the quarter hour on
+- right-click to toggle the quarter hour off
+- left-click and drag to grow or shrink the selection
+- right-click and drag to clear selection
+- double-click to toggle the entire hour on or off
+- right-double-click to toggle the entire hour off
+- scroll mouse wheel to grow or shrink the selection
+- double-click on center to toggle dimming on or off
 
 
 Works under Windows, *might* work under Linux/OSX.
 
 If launching the program manually, `--start-minimized` command-line option
-will auto-hide the settings window initially.
+will auto-hide the program window.
 
 If using the source distribution, open a terminal to src-directory,
 and run `python -m nightfall`.
@@ -49,8 +58,8 @@ and run `python -m nightfall`.
 Dependencies
 ------------
 
-If running as a Python script, NightFall requires Python 2.7 and wxPython
-4.0+ (https://wxpython.org)
+If running as a Python script, NightFall requires Python 2.7 or higher,
+and wxPython 4.0+ (https://wxpython.org)
 
 
 Attribution
