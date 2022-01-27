@@ -339,6 +339,9 @@ class NightFall(wx.App):
                 item = menu.Append(-1, label, kind=wx.ITEM_CHECK)
                 item.Check(bool(conf.SuspendedUntil))
                 menu.Bind(wx.EVT_MENU, self.on_toggle_suspend, id=item.GetId())
+        else:
+            item = menu.Append(-1, "S&uspend")
+            item.Enable(False)
         item = menu.Append(-1, "&Run at startup", kind=wx.ITEM_CHECK)
         item.Check(conf.StartupEnabled)
         menu.Bind(wx.EVT_MENU, self.on_toggle_startup, id=item.GetId())
