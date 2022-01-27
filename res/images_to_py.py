@@ -33,6 +33,8 @@ IMAGES = {
         "Small image for brightness slider start in theme editor.",
     "IconTray_Off.png":
         "Tray icon when theme is not applied.",
+    "IconTray_Off_Paused.png":
+        "Tray icon when theme is temporarily suspended.",
     "IconTray_Off_Scheduled.png":
         "Tray icon when theme is not applied and schedule is enabled.",
     "IconTray_On.png":

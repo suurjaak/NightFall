@@ -7,7 +7,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     26.01.2022
-@modified    26.01.2022
+@modified    27.01.2022
 ------------------------------------------------------------------------------
 """
 try:
@@ -245,6 +245,25 @@ IconTray_Off = PyEmbeddedImage(
     "TkgCEGQjD3a3BoTIPvkHAV/lIDqbzf5Uq9UPQqtRCBARFvuhiJVmFGBgLpezvuj9udPpvFio"
     "+XzeVdGYQifPsaLCXR9gXLHiuFQqde3t8FgsFvdCofAiY9IC+CIAm3dmMnE+nU6HMvK5XC5/"
     "azabt3d/oxutVqui0FZhQ2ct0qi5FPhEc9Dr9d79zn8BzRuXAnOgpKsAAAAASUVORK5CYII="
+)
+
+
+"""Tray icon when theme is temporarily suspended."""
+IconTray_Off_Paused = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAACqElEQVQ4y12Tu0psSRSGv6pd"
+    "u7q1a3uhGxoREwWDA2YTmXekwpgYGwyGBjKDobHMwMA8wUkMJuoBfQCfokHkgIHSiAra7b7U"
+    "rsueZLo5Z1ayVlDr+2vdBP+z29vbLe/9cYxxP0mStaZpaLfb41ardeOc+7q7u/vt+/diFgyH"
+    "Q9lqtS6ttacLCwv67e2NJEkwxqCUIssykiSpY4x/5Xl+PhgM4hwwHA6lMeafqqoOhBBMp1Oc"
+    "cywuLpIkCSGEOUhrjZTyuizLnweDQZQASqnLuq4PvPe8vr7y/PxMnufkeU5VVUgpcc5RliV5"
+    "nlOW5YEQ4hJAXF1dbUkpR4D23vP+/k5ZlgghWF1dxRgDQAiBNE2RUiKlJE3TWkr5RXnvj733"
+    "uigKiqKg1+uxt7dHURTc3d2RZRk7Ozs8Pj4yGo1QSiGlxHuvkyQ5lnme708mE6qqwlqLlJL1"
+    "9XX6/f5MiX6/T5ZlWGup6xrn3CzeV9PpdC2EgFKKGCMATdMQY+Tz85N2uz0v4ePjgyzLEEKQ"
+    "pikhhDVV1zXWWpRSeO/nkBgjeZ6ztLRE0zRYa3l5ecE5hzEG5xxaa5T3flxVVd97TwiBsizn"
+    "S+K9x1o7Bwoh5mL/jXMsy7K8sdZSFAVVVc3994nWWpxzCCGYCTVNQwjhRpydnW0VRTEKIWhr"
+    "LcYYtre3EULw9PTE8vIy3W6XyWTCeDxGKUWv10NrXUspvwiAk5OT3733v856IISYT2DWG601"
+    "KysrdDqd2Yb+cXp6+psEuL+/P3fOXTvn5t+LMeKco6oqYoxzcKvVQghxvbGxcQ6QADw8PDTd"
+    "bvdvrXUnhPBT0zTJrH6lFEopjDF0Op06TdM/Nzc3fzk8PIw/XOPMjo6OtoDjNE33pZRrxhiM"
+    "MWOt9Y3W+uvFxcUP5/wvIpuHTwi8H/EAAAAASUVORK5CYII="
 )
 
 

@@ -9,7 +9,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    26.01.2022
+@modified    27.01.2022
 ------------------------------------------------------------------------------
 """
 import datetime
@@ -102,7 +102,7 @@ class NightFall(wx.App):
             dim, sch = (False if i < 2 else True), (True if i % 2 else False)
             self.TRAYICONS[dim][sch] = img.Icon
         trayicon = self.trayicon = wx.adv.TaskBarIcon()
-        self.set_tray_icon(self.TRAYICONS[False][False])
+        self.set_tray_icon()
         trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DCLICK, self.on_toggle_dimming_tray)
         trayicon.Bind(wx.adv.EVT_TASKBAR_LEFT_DOWN,   self.on_lclick_tray)
         trayicon.Bind(wx.adv.EVT_TASKBAR_RIGHT_DOWN,  self.on_open_tray_menu)
@@ -139,17 +139,17 @@ class NightFall(wx.App):
         elif "MANUAL TOGGLED" == topic:
             self.frame.cb_manual.Value = data
             dimming = not conf.SuspendedUntil and self.dimmer.should_dim()
-            self.set_tray_icon(self.TRAYICONS[dimming][conf.ScheduleEnabled])
+            self.set_tray_icon(dimming, conf.ScheduleEnabled)
             self.populate_suspend()
         elif "SCHEDULE TOGGLED" == topic:
             self.frame.cb_schedule.Value = data
             dimming = not conf.SuspendedUntil and self.dimmer.should_dim()
-            self.set_tray_icon(self.TRAYICONS[dimming][conf.ScheduleEnabled])
+            self.set_tray_icon(dimming, conf.ScheduleEnabled)
         elif "SCHEDULE CHANGED" == topic:
             self.frame.selector_time.SetSelections(data)
         elif "SCHEDULE IN EFFECT" == topic:
             dimming = not conf.SuspendedUntil
-            self.set_tray_icon(self.TRAYICONS[dimming][True])
+            self.set_tray_icon(dimming, True)
             if not self.skip_notification \
             and (not self.frame.Shown or self.frame.IsIconized()):
                 n = conf.ThemeName or ""
@@ -161,7 +161,7 @@ class NightFall(wx.App):
             self.populate_suspend()
         elif "SUSPEND TOGGLED" == topic:
             dimming = not conf.SuspendedUntil and self.dimmer.should_dim()
-            self.set_tray_icon(self.TRAYICONS[dimming][conf.ScheduleEnabled])
+            self.set_tray_icon(dimming, conf.ScheduleEnabled)
             self.populate_suspend()
         elif "STARTUP TOGGLED" == topic:
             self.frame.cb_startup.Value = data
@@ -170,11 +170,11 @@ class NightFall(wx.App):
             self.frame.panel_startup.ContainingSizer.Layout()
         elif "MANUAL IN EFFECT" == topic:
             dimming = not conf.SuspendedUntil
-            self.set_tray_icon(self.TRAYICONS[dimming][conf.ScheduleEnabled])
+            self.set_tray_icon(dimming, conf.ScheduleEnabled)
             self.skip_notification = False
             self.populate_suspend()
         elif "NORMAL DISPLAY" == topic:
-            self.set_tray_icon(self.TRAYICONS[False][conf.ScheduleEnabled])
+            self.set_tray_icon(False, conf.ScheduleEnabled)
             self.skip_notification = False
             self.populate_suspend()
         elif topic in ("THEME APPLIED", "THEME CHANGED"):
@@ -195,8 +195,10 @@ class NightFall(wx.App):
         return None
 
 
-    def set_tray_icon(self, icon):
-        """Sets the icon into tray and sets a configured tooltip."""
+    def set_tray_icon(self, dimming=False, scheduled=False):
+        """Sets the relevant icon into tray, with the configured tooltip."""
+        icon = self.TRAYICONS[dimming][scheduled]
+        if conf.SuspendedUntil: icon = images.IconTray_Off_Paused.Icon
         self.trayicon.SetIcon(icon, conf.TrayTooltip)
 
 

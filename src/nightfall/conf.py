@@ -10,7 +10,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    26.01.2022
+@modified    27.01.2022
 ------------------------------------------------------------------------------
 """
 try: import ConfigParser as configparser # Py2
@@ -26,9 +26,9 @@ except Exception: pass
 """Program title."""
 Title = "NightFall"
 
-Version = "2.2.dev4"
+Version = "2.2.dev5"
 
-VersionDate = "26.01.2022"
+VersionDate = "27.01.2022"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
