@@ -4,7 +4,7 @@
 ::
 :: @author    Erki Suurjaak
 :: @created   21.08.2019
-:: @modified  17.09.2020
+:: @modified  28.01.2022
 @echo off
 :: Expand variables at execution time rather than at parse time
 setlocal EnableDelayedExpansion
@@ -15,19 +15,21 @@ set SETUPDIR=%CD%
 cd ..
 for %%f in ("%CD%") do set NAME=%%~nxf
 
-if exist "%NAME%\" cd %NAME%
+set SUFFIX64=
+for /f %%i in ('python -c "import struct; print struct.calcsize(""P"") * 8"') do set ADDRSIZE=%%i
+if "%ADDRSIZE%" equ "64" set SUFFIX64=_x64
 
-for /f %%I in ('python -c "import struct; print(struct.calcsize(chr(80)) * 8 == 64)"') do set IS_64=%%I
-if [%IS_64%] == [True] (
-    set SUFFIX64=_x64
-)
 if [%1] == [] (
-    for /f %%I in ('python -c "import conf; print conf.Version"') do set VERSION=%%I
+    cd src
+    for /f %%I in ('python -c "from nightfall import conf; print conf.Version"') do set VERSION=%%I
     set EXEFILE=%INITIAL_DIR%\%NAME%_!VERSION!%SUFFIX64%.exe
 ) else (
     for /f "tokens=2 delims=_ " %%a in ("%~n1") do set VERSION=%%a
+    echo "VERSION2 = %VERSION%."
     set EXEFILE=%INITIAL_DIR%\%1
 )
+
+
 
 if not exist "%EXEFILE%" echo %EXEFILE% missing. && goto :END
 set NSISDIR=C:\Program Files (x86)\Nullsoft Scriptable Install System

@@ -6,21 +6,24 @@
 ; /DSUFFIX64=<"_x64" for 64-bit installer>
 ;
 ; @created   18.10.2012
-; @modified  22.09.2020
+; @modified  28.01.2022
 
 Unicode True
 
+; HM NIS Edit Wizard helper defines
 !define PRODUCT_NAME "NightFall"
 !define PRODUCT_PUBLISHER "Erki Suurjaak"
 !define PRODUCT_WEB_SITE "https://suurjaak.github.io/NightFall"
 !define BASENAME "nightfall"
 !define PROGEXE "${BASENAME}.exe"
-; VERSION and SUFFIX64 *should* come from command-line parameter
-!define /ifndef VERSION "2.0"
-!define /ifndef SUFFIX64 ""
 
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PROGEXE}"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
+
+; VERSION and SUFFIX64 *should* come from command-line parameter
+!define /ifndef VERSION "1.0"
+!define /ifndef SUFFIX64 ""
+
 
 !define UNINSTALL_FILENAME "uninstall.exe"
 ; suggested name of directory to install (under $PROGRAMFILES or $LOCALAPPDATA)
@@ -45,14 +48,13 @@ Unicode True
 !include NsisMultiUserLang.nsh
 !include MUI.nsh
 !include nsProcess.nsh
-!include RefreshSysTray.nsh
 !include x64.nsh
 
 !define MUI_TEXT_WELCOME_INFO_TEXT "This wizard will guide you through the installation of $(^NameDA).$\r$\n$\r$\n$_CLICK"
 
 ; MUI Settings
 !define MUI_ABORTWARNING
-!define MUI_ICON "${BASENAME}.ico"
+!define MUI_ICON "..\res\Icon.ico"
 !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
 
 ; Welcome page
@@ -129,21 +131,32 @@ Function un.onUninstSuccess
   MessageBox MB_ICONINFORMATION|MB_OK "$(^Name) was successfully removed from your computer."
 FunctionEnd
 
-
 Section "MainSection" SEC01
-  ${nsProcess::KillProcess} "${PROGEXE}" $R4
-  Call RefreshSysTray
+  start:
+  ${nsProcess::FindProcess} "${PROGEXE}" $0
+  StrCmp $0 "0" warn
+  Goto proceed
 
+  warn:
+  MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL "${PRODUCT_NAME} is currently running. Please close it before continuing." /SD IDCANCEL IDOK ok IDCANCEL cancel
+  ok:
+  Goto start
+
+  cancel:
+  Abort
+
+  proceed:
   SetOutPath "$INSTDIR"
   SetOverwrite ifnewer
   File "${PROGEXE}"
   SetOverwrite off
   File "${BASENAME}.ini"
   SetOverwrite ifnewer
-  File "README.txt"
+  File /oname=README.txt "README.txt"
+  File "3rd-party licenses.txt"
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
-  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\${PROGEXE}"
-  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\README.lnk" "$INSTDIR\README.txt"
+  CreateShortCut  "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk" "$INSTDIR\${PROGEXE}"
+  CreateShortCut  "$SMPROGRAMS\${PRODUCT_NAME}\README.lnk" "$INSTDIR\README.txt"
 SectionEnd
 
 Section -AdditionalIcons
@@ -167,12 +180,28 @@ SectionEnd
 
 Section Uninstall
   SetAutoClose true
-  ${nsProcess::KillProcess} "${PROGEXE}" $R4
+  start:
 
+  ${nsProcess::FindProcess} "${PROGEXE}" $0
+  StrCmp $0 "0" warn
+  Goto proceed
+
+  warn:
+  MessageBox MB_ICONEXCLAMATION|MB_OKCANCEL "${PRODUCT_NAME} is currently running. Please close it before continuing." /SD IDCANCEL IDOK ok IDCANCEL cancel
+  ok:
+  Goto start
+
+  cancel:
+  Abort
+
+  proceed:
+  Delete "$INSTDIR\${PROGEXE}"
+  Delete "$INSTDIR\${BASENAME}.ini"
   Delete "$INSTDIR\${PRODUCT_NAME}.url"
   Delete "$INSTDIR\${UNINSTALL_FILENAME}"
   Delete "$INSTDIR\README.txt"
-  Delete "$INSTDIR\${BASENAME}.ini"
+  Delete "$INSTDIR\3rd-party licenses.txt"
+  RMDir "$INSTDIR"
 
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\${PRODUCT_NAME}.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\README.lnk"
@@ -180,14 +209,9 @@ Section Uninstall
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall ${PRODUCT_NAME}.lnk"
   RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
 
-  Sleep 500
-  Delete "$INSTDIR\${PROGEXE}"
-  RMDir "$INSTDIR"
-
   DeleteRegKey SHCTX "${PRODUCT_UNINST_KEY}"
   DeleteRegKey SHCTX "${PRODUCT_DIR_REGKEY}"
   !insertmacro MULTIUSER_RegistryRemoveInstallInfo
-  Call un.RefreshSysTray
 
   SetShellVarContext current
   Delete "$LOCALAPPDATA\${PRODUCT_NAME}\${BASENAME}.ini"
