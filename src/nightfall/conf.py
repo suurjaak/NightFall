@@ -10,7 +10,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    27.01.2022
+@modified    28.01.2022
 ------------------------------------------------------------------------------
 """
 try: import ConfigParser as configparser # Py2
@@ -23,12 +23,11 @@ import sys
 try: import wx
 except Exception: pass
 
-"""Program title."""
+"""Program name, title, version number, and version date."""
+Name = "nightfall"
 Title = "NightFall"
-
-Version = "2.2.dev14"
-
-VersionDate = "27.01.2022"
+Version = "2.2.dev15"
+VersionDate = "28.01.2022"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
