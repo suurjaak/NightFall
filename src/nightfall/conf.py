@@ -26,7 +26,7 @@ except Exception: pass
 """Program name, title, version number, and version date."""
 Name = "nightfall"
 Title = "NightFall"
-Version = "2.2.dev15"
+Version = "2.2.dev16"
 VersionDate = "28.01.2022"
 
 if getattr(sys, 'frozen', False):

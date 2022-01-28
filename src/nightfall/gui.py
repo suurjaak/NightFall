@@ -454,8 +454,6 @@ class NightFall(wx.App):
         self.trayicon.Destroy()
         self.frame.Destroy()
         wx.CallAfter(sys.exit) # Immediate exit fails if exiting from tray
-        try: sys.exit()
-        except Exception: pass
 
 
     def on_toggle_console(self, event):
