@@ -58,8 +58,14 @@ and run `python -m nightfall`.
 Dependencies
 ------------
 
-If running as a Python script, NightFall requires Python 2.7 or higher,
-and wxPython 4.0+ (https://wxpython.org)
+If running as a Python script, NightFall requires Python 3.5+ or Python 2.7,
+and the following 3-rd party Python packages:
+
+- appdirs (https://pypi.org/project/appdirs)
+- wxPython 4.0+ (https://wxpython.org)
+
+All dependencies can be installed by running `pip install -r requirements.txt`
+in NightFall source distribution folder.
 
 
 Attribution
