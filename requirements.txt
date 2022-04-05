@@ -1,1 +1,2 @@
+appdirs
 wxPython>=4.0

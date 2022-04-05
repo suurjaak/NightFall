@@ -9,7 +9,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    20.03.2022
+@modified    05.04.2022
 ------------------------------------------------------------------------------
 """
 import datetime
@@ -764,7 +764,8 @@ class NightFall(wx.App):
 
 
         # Create About-page
-        label_about = frame.label_about = wx.html.HtmlWindow(panel_about)
+        label_about = frame.label_about = wx.html.HtmlWindow(panel_about,
+            style=wx.html.HW_SCROLLBAR_NEVER)
         args = {"textcolour": ColourManager.ColourHex(wx.SYS_COLOUR_BTNTEXT),
                 "linkcolour": ColourManager.ColourHex(wx.SYS_COLOUR_HOTLIGHT)}
         label_about.SetPage(conf.AboutHTMLTemplate % args)

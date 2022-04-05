@@ -8,7 +8,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     28.01.2022
-@modified    28.01.2022
+@modified    01.02.2022
 ------------------------------------------------------------------------------
 """
 import os
@@ -53,7 +53,7 @@ setuptools.setup(
     keywords             = "brightness color-temperature darkmode dark-mode desktop eye-strain"
                            "flux gamma-ramps night nightmode night-mode schedule screen-brightness",
 
-    install_requires     = ["wxPython>=4.0"],
+    install_requires     = ["appdirs", "wxPython>=4.0"],
     entry_points         = {"gui_scripts": ["{0} = {0}.main:run".format(PACKAGE)]},
 
     package_dir          = {"": "src"},

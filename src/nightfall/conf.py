@@ -10,7 +10,7 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    28.01.2022
+@modified    05.04.2022
 ------------------------------------------------------------------------------
 """
 try: import ConfigParser as configparser # Py2
@@ -20,14 +20,13 @@ import json
 import os
 import sys
 
-try: import wx
-except Exception: pass
+import appdirs
 
 """Program name, title, version number, and version date."""
 Name = "nightfall"
 Title = "NightFall"
-Version = "2.2.dev16"
-VersionDate = "28.01.2022"
+Version = "2.2.dev17"
+VersionDate = "05.04.2022"
 
 if getattr(sys, 'frozen', False):
     # Running as a pyinstaller executable
@@ -60,8 +59,8 @@ OptionalFileDirectives = [
 ]
 Defaults = {}
 
-"""Name of file where FileDirectives are kept."""
-ConfigFile = "%s.ini" % os.path.join(EtcDirectory, Title.lower())
+"""Default path of file where FileDirectives are kept."""
+ConfigFile = os.path.join(EtcDirectory, "%s.ini" % Title.lower())
 
 """Settings window size in pixels, (w, h)."""
 WindowSize = (400, 380)
@@ -213,6 +212,7 @@ AboutHTMLTemplate = """
   <ul>
     <li>Python, <a href="https://www.python.org"><font color="%%(linkcolour)s">python.org</font></a></li>
     <li>wxPython, <a href="https://wxpython.org"><font color="%%(linkcolour)s">wxpython.org</font></a></li>
+    <li>appdirs, <a href="https://pypi.org/project/appdirs"><font color="%%(linkcolour)s">pypi.org/project/appdirs</font></a></li>
     %(pyinstaller)s
   </ul>
   </p>
@@ -220,15 +220,14 @@ AboutHTMLTemplate = """
   <p>
   Several icons from Fugue Icons, &copy; 2010 Yusuke Kamiyamane,
   <a href="https://p.yusukekamiyamane.com"><font color="%%(linkcolour)s">p.yusukekamiyamane.com</font></a>
-  </p>
-
   %(nsis)s
+  </p>
 </font>
 """ % {"pyinstaller": '<li>PyInstaller, <a href="https://www.pyinstaller.org">'
                       '<font color="%(linkcolour)s">pyinstaller.org</font></a></li>'
                       if getattr(sys, 'frozen', False) else "",
-       "nsis":        '<p>Installer from Nullsoft Scriptable Install System, <a href="https://nsis.sourceforge.io">'
-                      '<font color="%(linkcolour)s">nsis.sourceforge.io</font></a></p>'
+       "nsis":        '<br />Installer from Nullsoft Scriptable Install System, <a href="https://nsis.sourceforge.io">'
+                      '<font color="%(linkcolour)s">nsis.sourceforge.io</font></a>'
                       if getattr(sys, 'frozen', False) else ""}
 
 
@@ -237,10 +236,11 @@ def load():
     global Defaults
 
     configpaths = [ConfigFile]
-    if getattr(sys, 'frozen', False):
-        try:
-            p = wx.StandardPaths.Get().UserLocalDataDir
-            configpaths.append(os.path.join(p, "%s.ini" % Title.lower()))
+    if not Defaults:  # First load
+        try: # Instantiate OS- and user-specific path
+            p = appdirs.user_config_dir(Title, appauthor=False)
+            # Try user-specific path first, then path under application folder
+            configpaths.insert(0, os.path.join(p, "%s.ini" % Title.lower()))
         except Exception: pass
 
     section = "*"
@@ -254,14 +254,14 @@ def load():
         # Try user-specific path first, then path under application folder
         for path in configpaths[::-1]:
             if os.path.isfile(path) and parser.read(ConfigFile):
-                break # for path
+                break  # for path
 
         def parse_value(name):
-            try: # parser.get can throw an error if value not found
+            try:  # parser.get can throw an error if value not found
                 value_raw = parser.get(section, name)
             except Exception:
                 return None, False
-            try: # Try to interpret as JSON, fall back on raw string
+            try:  # Try to interpret as JSON, fall back on raw string
                 value = json.loads(value_raw)
             except ValueError:
                 value = value_raw
@@ -270,32 +270,32 @@ def load():
         for name in FileDirectives + OptionalFileDirectives:
             [setattr(module, name, v) for v, s in [parse_value(name)] if s]
     except Exception:
-        pass # Fail silently
+        pass  # Fail silently
 
 
 def save():
     """Saves directives into ConfigFile."""
     configpaths = [ConfigFile]
-    if getattr(sys, 'frozen', False):
-        try:
-            p = wx.StandardPaths.Get().UserLocalDataDir
-            configpaths.append(os.path.join(p, "%s.ini" % Title.lower()))
-        except Exception: pass
+    try:
+        p = appdirs.user_config_dir(Title, appauthor=False)
+        userpath = os.path.join(p, "%s.ini" % Title.lower())
+        # Pick only userpath if exists, else try application folder first
+        if os.path.isfile(userpath): configpaths = [userpath]
+        else: configpaths.append(userpath)
+    except Exception: pass
 
     section = "*"
     module = sys.modules[__name__]
     parser = configparser.RawConfigParser()
-    parser.optionxform = str # Force case-sensitivity on names
+    parser.optionxform = str  # Force case-sensitivity on names
     parser.add_section(section)
     try:
         for path in configpaths:
-            # Try path under application folder first, then user-specific path
             try: os.makedirs(os.path.split(path)[0])
             except Exception: pass
             try: f = open(path, "w")
-            except Exception: continue # for path
-            else: break # for path
-
+            except Exception: continue  # for path
+            else: break  # for path
 
         f.write("# %s configuration written on %s.\n" % 
                 (Title, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
@@ -311,4 +311,4 @@ def save():
         parser.write(f)
         f.close()
     except Exception:
-        pass # Fail silently
+        pass  # Fail silently
