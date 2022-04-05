@@ -9,11 +9,12 @@ Released under the MIT License.
 
 @author      Erki Suurjaak
 @created     15.10.2012
-@modified    27.01.2022
+@modified    20.03.2022
 ------------------------------------------------------------------------------
 """
 import datetime
 import functools
+import locale
 import os
 import re
 import sys
@@ -125,6 +126,10 @@ class NightFall(wx.App):
             mylocale = wx.Locale(wx.LANGUAGE_ENGLISH_US, wx.LOCALE_LOAD_DEFAULT)
             mylocale.AddCatalog("wxstd")
             self._initial_locale = mylocale  # Override wx.App._initial_locale
+            # Workaround for MSW giving locale as "en-US"; standard format is "en_US".
+            # Py3 provides "en[-_]US" in wx.Locale names and accepts "en" in locale.setlocale();
+            # Py2 provides "English_United States.1252" in wx.Locale.SysName and accepts only that.
+            locale.setlocale(locale.LC_ALL, mylocale.SysName)
 
 
     def on_dimmer_event(self, event):
