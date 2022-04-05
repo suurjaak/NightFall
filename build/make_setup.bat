@@ -4,7 +4,7 @@
 ::
 :: @author    Erki Suurjaak
 :: @created   21.08.2019
-:: @modified  28.01.2022
+:: @modified  05.04.2022
 @echo off
 :: Expand variables at execution time rather than at parse time
 setlocal EnableDelayedExpansion
@@ -16,12 +16,12 @@ cd ..
 for %%f in ("%CD%") do set NAME=%%~nxf
 
 set SUFFIX64=
-for /f %%i in ('python -c "import struct; print struct.calcsize(""P"") * 8"') do set ADDRSIZE=%%i
+for /f %%i in ('python -c "import struct; print(struct.calcsize(""P"") * 8)"') do set ADDRSIZE=%%i
 if "%ADDRSIZE%" equ "64" set SUFFIX64=_x64
 
 if [%1] == [] (
     cd src
-    for /f %%I in ('python -c "from nightfall import conf; print conf.Version"') do set VERSION=%%I
+    for /f %%I in ('python -c "from nightfall import conf; print(conf.Version)"') do set VERSION=%%I
     set EXEFILE=%INITIAL_DIR%\%NAME%_!VERSION!%SUFFIX64%.exe
 ) else (
     for /f "tokens=2 delims=_ " %%a in ("%~n1") do set VERSION=%%a
