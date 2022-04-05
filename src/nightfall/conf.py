@@ -25,7 +25,7 @@ import appdirs
 """Program name, title, version number, and version date."""
 Name = "nightfall"
 Title = "NightFall"
-Version = "2.2.dev17"
+Version = "2.2"
 VersionDate = "05.04.2022"
 
 if getattr(sys, 'frozen', False):
